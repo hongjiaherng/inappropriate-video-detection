@@ -1,0 +1,173 @@
+{
+  "abuse":{
+    "en":"abuse",
+    "es":"abuso",
+    "pt":"Abuso",
+    "hi":"दुर्व्यवहार करना",
+    "ko":"남용",
+    "zh-cn":"虐待",
+    "ms":"penderaan"
+  },
+  "arson":{
+    "en":"arson",
+    "es":"incendio provocado",
+    "pt":"incêndio culposo",
+    "hi":"आगजनी",
+    "ko":"방화",
+    "zh-cn":"纵火",
+    "ms":"pembakaran"
+  },
+  "assault":{
+    "en":"assault",
+    "es":"agresión",
+    "pt":"assalto",
+    "hi":"हमला",
+    "ko":"폭행",
+    "zh-cn":"突击",
+    "ms":"serangan"
+  },
+  "burglary":{
+    "en":"burglary",
+    "es":"robo",
+    "pt":"roubo",
+    "hi":"सेंध",
+    "ko":"강도",
+    "zh-cn":"盗窃",
+    "ms":"pecah rumah"
+  },
+  "car chase":{
+    "en":"car chase",
+    "es":"persecución de coches",
+    "pt":"perseguição de carro",
+    "hi":"कार की दौड़",
+    "ko":"자동차 추격전",
+    "zh-cn":"追车",
+    "ms":"mengejar kereta"
+  },
+  "explosion":{
+    "en":"explosion",
+    "es":"explosión",
+    "pt":"explosão",
+    "hi":"विस्फोट",
+    "ko":"폭발",
+    "zh-cn":"爆炸",
+    "ms":"letupan"
+  },
+  "fighting":{
+    "en":"fighting",
+    "es":"lucha",
+    "pt":"brigando",
+    "hi":"लड़ाई करना",
+    "ko":"화이팅",
+    "zh-cn":"斗争",
+    "ms":"bergaduh"
+  },
+  "fire":{
+    "en":"fire",
+    "es":"fuego",
+    "pt":"fogo",
+    "hi":"आग",
+    "ko":"불",
+    "zh-cn":"火",
+    "ms":"kebakaran"
+  },
+  "gory":{
+    "en":"gory",
+    "es":"sangriento",
+    "pt":"sangrento",
+    "hi":"रक्तमय",
+    "ko":"피투성이의",
+    "zh-cn":"血淋淋的",
+    "ms":"berdarah"
+  },
+  "gunshot":{
+    "en":"gunshot",
+    "es":"cañonazo",
+    "pt":"tiro",
+    "hi":"गोली",
+    "ko":"사격",
+    "zh-cn":"枪声",
+    "ms":"tembakan"
+  },
+  "riot":{
+    "en":"riot",
+    "es":"disturbio",
+    "pt":"rebelião",
+    "hi":"दंगा",
+    "ko":"폭동",
+    "zh-cn":"暴动",
+    "ms":"rusuhan"
+  },
+  "road accident":{
+    "en":"road accident",
+    "es":"accidente de tráfico",
+    "pt":"acidente de viação",
+    "hi":"सड़क दुर्घटना",
+    "ko":"교통사고",
+    "zh-cn":"车祸",
+    "ms":"kemalangan jalan raya"
+  },
+  "robbery":{
+    "en":"robbery",
+    "es":"robo",
+    "pt":"roubo",
+    "hi":"डकैती",
+    "ko":"강도",
+    "zh-cn":"抢劫",
+    "ms":"rompakan"
+  },
+  "shooting":{
+    "en":"shooting",
+    "es":"tiroteo",
+    "pt":"tiroteio",
+    "hi":"शूटिंग",
+    "ko":"촬영",
+    "zh-cn":"射击",
+    "ms":"menembak"
+  },
+  "shoplifting":{
+    "en":"shoplifting",
+    "es":"hurto",
+    "pt":"furto em loja",
+    "hi":"shoplifting",
+    "ko":"좀도둑질",
+    "zh-cn":"入店行窃",
+    "ms":"mencuri"
+  },
+  "stealing":{
+    "en":"stealing",
+    "es":"robando",
+    "pt":"roubando",
+    "hi":"चोरी",
+    "ko":"훔침",
+    "zh-cn":"偷窃",
+    "ms":"mencuri"
+  },
+  "vandalism":{
+    "en":"vandalism",
+    "es":"vandalismo",
+    "pt":"vandalismo",
+    "hi":"बर्बरता",
+    "ko":"공공 기물 파손",
+    "zh-cn":"破坏公物",
+    "ms":"vandalisme"
+  },
+  "violence":{
+    "en":"violence",
+    "es":"violencia",
+    "pt":"violência",
+    "hi":"हिंसा",
+    "ko":"폭행",
+    "zh-cn":"暴力",
+    "ms":"keganasan"
+  },
+  "weapon":{
+    "en":"weapon",
+    "es":"arma",
+    "pt":"arma",
+    "hi":"हथियार",
+    "ko":"무기",
+    "zh-cn":"武器",
+    "ms":"senjata"
+  }
+}

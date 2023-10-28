@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+
+# vscode
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Hide this for the time being
+/poetry.lock
+/pyproject.toml

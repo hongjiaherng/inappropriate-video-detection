@@ -4,10 +4,4 @@ cookies.json
 ssstik_params.json
 
 # Data
-# Untrack all meta files except keywords_en.json
-!data/meta
-data/meta/*
-!data/meta/keywords_en.json
-
-# Untrack all videos
-data/videos/
+data/videos/*/*.mp4

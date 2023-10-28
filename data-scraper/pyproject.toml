@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "data-scraper"
+version = "0.1.0"
+description = ""
+authors = ["hongjiaherng <jiaherng2001@gmail.com>"]
+readme = "README.md"
+packages = [{include = "data_scraper"}]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.13"
+numpy = "^1.26.0"
+pandas = "^2.1.1"
+matplotlib = "^3.8.0"
+tqdm = "^4.66.1"
+ipykernel = "^6.25.2"
+googletrans = "==3.1.0a0"
+python-dotenv = "^1.0.0"
+google-api-python-client = "^2.103.0"
+google-auth-httplib2 = "^0.1.1"
+yt-dlp = "^2023.10.13"
+tiktokapi = "^5.2.2"
+playwright = "==1.30.0"
+beautifulsoup4 = "^4.12.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

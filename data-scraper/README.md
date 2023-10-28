@@ -167,7 +167,3 @@ Perform the search in both Youtube Shorts and Tiktok.
 
 - Label the videos as "appropriate" or "inappropriate" based on the violent elements in the videos.
 - Tool: https://labelbox.com/product/annotate/video/
-
-## License
-
-[MIT](LICENSE)

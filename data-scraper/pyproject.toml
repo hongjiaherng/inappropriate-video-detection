@@ -4,6 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["hongjiaherng <jiaherng2001@gmail.com>"]
 readme = "README.md"
+license = "MIT"
 packages = [{include = "data_scraper"}]
 
 [tool.poetry.dependencies]

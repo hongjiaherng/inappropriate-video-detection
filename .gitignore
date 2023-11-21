@@ -7,6 +7,3 @@ __pycache__/
 # Jupyter Notebook
 .ipynb_checkpoints/
 
-# Hide this for the time being
-/poetry.lock
-/pyproject.toml

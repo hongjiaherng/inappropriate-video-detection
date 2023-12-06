@@ -1,4 +1,5 @@
 #!/bin/bash
+# Must set $HF_TOKEN in advance
 
 # Run the commands in a loop (approximately 4k+ to finish all videos)
 for i in {1..40}; do
@@ -16,7 +17,9 @@ for i in {1..40}; do
         --hf_dataset=jherng/xd-violence \
         --feature_dir=data/outputs/i3d_rgb \
         --path_in_repo=data/i3d_rgb \
-        --remove_after_uploading
+        --remove_after_uploading \
+        --hf_token=$HF_TOKEN
+
 done
 
 echo "Running final iteration to clear up incomplete videos"
@@ -32,6 +35,7 @@ python src/upload_to_hf.py \
     --hf_dataset=jherng/xd-violence \
     --feature_dir=data/outputs/i3d_rgb \
     --path_in_repo=data/i3d_rgb \
-    --remove_after_uploading
+    --remove_after_uploading \
+    --hf_token=$HF_TOKEN
 
 echo "Script completed."

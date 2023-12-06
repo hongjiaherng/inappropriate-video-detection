@@ -394,8 +394,9 @@ class ToDType(torch.nn.Module):
 
     def forward(self, result: Dict) -> Dict:
         clips = result["inputs"]
-        clips = F.to_dtype(clips, dtype=self.dtype, scale=self.scale)
-
+        clips = clips.type(self.dtype)
+        if self.scale:
+            clips = clips / 255.0
         result["inputs"] = clips
 
         return result

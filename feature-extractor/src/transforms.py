@@ -213,15 +213,16 @@ class VideoDecode(torch.nn.Module):
             clips, (num_clips, clip_len, *clips.shape[1:])
         )  # (N, T, C, H, W)
 
+        result["inputs"] = clips
+        result["meta"]["original_frame_shape"] = tuple(clips.shape[-2:])
+        result["meta"]["frame_shape"] = tuple(clips.shape[-2:])
+
         # free memory of video_reader, frame_indices
         result["meta"].pop("video_reader")
         del container
         result["meta"].pop("frame_indices")
         del frame_indices
-
-        result["inputs"] = clips
-        result["meta"]["original_frame_shape"] = tuple(clips.shape[-2:])
-        result["meta"]["frame_shape"] = tuple(clips.shape[-2:])
+        del clips
 
         return result
 
@@ -254,6 +255,9 @@ class Resize(torch.nn.Module):
         result["meta"]["frame_shape"] = tuple(
             clips.shape[-2:]
         )  # last 2 dims surely represent (H, W)
+
+        # free memory
+        del clips
 
         return result
 
@@ -293,6 +297,9 @@ class FiveCrop(torch.nn.Module):
         )  # last 2 dims surely represent (H, W)
         result["meta"]["num_crops"] = 5
 
+        # free memory
+        del clips
+
         return result
 
     def __repr__(self) -> str:
@@ -330,6 +337,9 @@ class TenCrop(torch.nn.Module):
             clips.shape[-2:]
         )  # last 2 dims surely represent (H, W)
         result["meta"]["num_crops"] = 10
+
+        # free memory
+        del clips
 
         return result
 
@@ -369,6 +379,9 @@ class CenterCrop(torch.nn.Module):
         )  # last 2 dims surely represent (H, W)
         result["meta"]["num_crops"] = 1
 
+        # free memory
+        del clips
+
         return result
 
     def __repr__(self) -> str:
@@ -399,8 +412,11 @@ class ToDType(torch.nn.Module):
         clips = result["inputs"]
         clips = clips.type(self.dtype)
         if self.scale:
-            clips = clips / 255.0
+            clips /= 255.0
         result["inputs"] = clips
+
+        # free memory
+        del clips
 
         return result
 
@@ -430,9 +446,12 @@ class Normalize(torch.nn.Module):
 
     def forward(self, result: Dict) -> Dict:
         clips = result["inputs"]
-        clips = F.normalize(clips, mean=self.mean, std=self.std)
+        clips = F.normalize(clips, mean=self.mean, std=self.std, inplace=True)
 
         result["inputs"] = clips
+
+        # free memory
+        del clips
 
         return result
 
@@ -467,6 +486,9 @@ class ConvertTCHWToCTHW(torch.nn.Module):
         clips = torch.permute(clips, self.permute_idx)
 
         result["inputs"] = clips
+
+        # free memory
+        del clips
 
         return result
 

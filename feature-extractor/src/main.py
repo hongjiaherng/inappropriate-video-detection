@@ -107,6 +107,9 @@ def run(args):
 
             video_ex = preprocessing(video_ex)
 
+            # garbage collect any possible unused obj
+            gc.collect()
+
             # iterate over each clip in the video (clip dimension)
             num_clips_cur_video = video_ex["inputs"].size()[0]
             os.makedirs(temp_dir, exist_ok=True)

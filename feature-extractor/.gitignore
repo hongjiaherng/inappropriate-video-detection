@@ -1,3 +1,6 @@
+# Pretrained model
+*.pth
+
 # Extracted features
 *.npy
 

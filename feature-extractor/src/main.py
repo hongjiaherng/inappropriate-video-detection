@@ -16,7 +16,7 @@ import datasets
 import numpy as np
 import torch
 import torch.nn as nn
-import tqdm
+import tqdm.auto as tqdm
 import torchvision
 
 ROOT_PATH = os.path.abspath(os.path.join(__file__, "../.."))
@@ -101,8 +101,9 @@ def run(args):
             )
         ):
             if i == force_stop_after_n_videos:
-                print()
-                logger.info(f"Force stop after {force_stop_after_n_videos} videos")
+                tqdm.tqdm.write(
+                    f"INFO:{__name__}:Force stop after {force_stop_after_n_videos} videos"
+                )
                 break
 
             video_ex = preprocessing(video_ex)

@@ -12,8 +12,9 @@ def main(args):
     feature_dir = os.path.abspath(args.feature_dir)
     path_in_repo = args.path_in_repo
     remove_after_uploading = bool(args.remove_after_uploading)
+    hf_token = args.hf_token
 
-    api = HfApi()
+    api = HfApi(token=hf_token)
 
     uploaded_url = api.upload_folder(
         folder_path=feature_dir,
@@ -53,6 +54,9 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Remove files after uploading.",
+    )
+    parser.add_argument(
+        "--hf_token", type=str, default=None, help="HF Access Token (Write)"
     )
 
     args = parser.parse_args()

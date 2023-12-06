@@ -9,7 +9,7 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, Optional
 from urllib.parse import urlsplit
 
 import datasets
@@ -17,8 +17,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import tqdm
+import torchvision
 
 ROOT_PATH = os.path.abspath(os.path.join(__file__, "../.."))
+
+torchvision.disable_beta_transforms_warning()
 
 # Set up logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +40,9 @@ def run(args):
     crop_type = args.crop_type
     io_backend = "http" if hf_dataset_name else "local"
     force_stop_after_n_videos = args.force_stop_after_n_videos
+    check_progress = (
+        os.path.abspath(args.check_progress) if args.check_progress else None
+    )
 
     logger.info(
         f"""Configs: {json.dumps(
@@ -50,13 +56,14 @@ def run(args):
             "crop_type": crop_type,
             "io_backend": io_backend,
             "force_stop_after_n_videos": force_stop_after_n_videos,
+            "check_progress": check_progress
         },
         indent=2,
     )}"""
     )
 
     # Check current progress
-    progress = get_progress(output_dir)
+    progress = get_progress(output_dir, check_progress)
     logger.info(f"Current progress: {len(progress)} done")
 
     # Init dataset that excludes already done progress
@@ -151,6 +158,16 @@ def run(args):
                 os.path.join(video_output_dir, f"{video_ex['meta']['id']}.npy"),
                 video_emb,
             )
+            if check_progress:
+                with open(check_progress, mode="a", encoding="utf-8") as f:
+                    f.write(
+                        f"""{Path(
+                            os.path.join(
+                                extract_relative_dir(video_ex["meta"]["filename"]),
+                                video_ex["meta"]["id"],
+                            )
+                        ).as_posix()}\n"""
+                    )
 
             # free up memory
             del video_ex, video_emb
@@ -158,7 +175,7 @@ def run(args):
             shutil.rmtree(temp_dir)
 
 
-def get_progress(output_dir: str) -> Set[str]:
+def get_progress(output_dir: str, check_progress: Optional[str]) -> Set[str]:
     """
     Get the progress of the feature extraction process by checking the output_dir for existing features.
     Each str in progress is in the format of <relative_dir>/<video_id>
@@ -166,17 +183,24 @@ def get_progress(output_dir: str) -> Set[str]:
 
     progress = set()
 
-    # empty progress if output_dir doesn't even exist
-    if not os.path.exists(output_dir):
-        return progress
+    if not check_progress:
+        # empty progress if output_dir doesn't even exist
+        if not os.path.exists(output_dir):
+            return progress
 
-    for fp in glob.glob(os.path.join(output_dir, "**/*.npy"), recursive=True):
-        splitted = split_filepath(full_filepath=fp, base_dirpath=output_dir)
-        joined = Path(
-            os.path.join(splitted["relative_dir"], splitted["filename"])
-        ).as_posix()  # join relative dir to filename without ext (e.g., 1004-2005/this_video_name)
+        for fp in glob.glob(os.path.join(output_dir, "**/*.npy"), recursive=True):
+            splitted = split_filepath(full_filepath=fp, base_dirpath=output_dir)
+            joined = Path(
+                os.path.join(splitted["relative_dir"], splitted["filename"])
+            ).as_posix()  # join relative dir to filename without ext (e.g., 1004-2005/this_video_name)
 
-        progress.add(joined)
+            progress.add(joined)
+    else:
+        if os.path.exists(check_progress):
+            with open(check_progress, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                for line in lines:
+                    progress.add(line.strip())
 
     return progress
 
@@ -370,6 +394,12 @@ if __name__ == "__main__":
         type=int,
         default=-1,
         help="The number of videos to extract feature from. If -1, all the videos in the dataset will be extracted exhaustively.",
+    )
+    parser.add_argument(
+        "--check_progress",
+        type=str,
+        default=None,
+        help="How to determine the progress of feature extraction? If None, check <output_dir>, if <filename>, check line by line.",
     )
     args = parser.parse_args()
 

@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 
 from huggingface_hub import HfApi
 
@@ -10,6 +11,7 @@ def main(args):
     hf_dataset_name = args.hf_dataset
     feature_dir = os.path.abspath(args.feature_dir)
     path_in_repo = args.path_in_repo
+    remove_after_uploading = bool(args.remove_after_uploading)
 
     api = HfApi()
 
@@ -20,6 +22,9 @@ def main(args):
         repo_type="dataset",
     )
     print(uploaded_url)
+
+    if remove_after_uploading:
+        shutil.rmtree(feature_dir)
 
 
 if __name__ == "__main__":
@@ -42,6 +47,12 @@ if __name__ == "__main__":
         type=str,
         default="/".join(["data", "i3d_rgb"]),
         help="Relative path of the directory in the repo.",
+    )
+    parser.add_argument(
+        "--remove_after_uploading",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Remove files after uploading.",
     )
 
     args = parser.parse_args()

@@ -5,7 +5,10 @@ from typing import Dict, Literal, Sequence, Union
 import decord
 import numpy as np
 import torch
+import torchvision
 import torchvision.transforms.v2.functional as F
+
+torchvision.disable_beta_transforms_warning()
 
 
 class AdaptDataFormat(torch.nn.Module):

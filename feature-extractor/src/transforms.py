@@ -163,7 +163,10 @@ class TemporalClipSample(torch.nn.Module):
             )
 
         frame_indices = np.arange(
-            0, max_num_clips * self.clip_len * self.sampling_rate, self.sampling_rate
+            0,
+            max_num_clips * self.clip_len * self.sampling_rate,
+            self.sampling_rate,
+            dtype=np.ushort,
         ).reshape(max_num_clips, self.clip_len)
         # (num_clips, clip_len)
 
@@ -224,6 +227,8 @@ class ClipsBatching(torch.nn.Module):
 
             results.append(batch_result)
 
+        del frame_indices
+
         return results
 
     def __repr__(self) -> str:
@@ -271,7 +276,6 @@ class VideoDecode(torch.nn.Module):
 
         # free memory of video_reader, frame_indices
         result["meta"].pop("video_reader")
-        del container
         result["meta"].pop("frame_indices")
         del frame_indices
         del clips

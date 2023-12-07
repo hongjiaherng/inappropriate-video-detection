@@ -47,6 +47,7 @@ preprocessing_cfg = dict(
     path_key=None,  # to be supplied by upstream
     num_clips=None,  # to be supplied by upstream
     crop_type=None,  # to be supplied by upstream
+    batch_size=None,  # to be supplied by upstream
     clip_len=32,
     sampling_rate=2,
     resize_size=256,
@@ -79,7 +80,73 @@ def build_model() -> nn.Module:
     return model
 
 
-def build_preprocessing_pipeline(
+def build_video2clips_pipeline(
+    batch_size: int,
+    io_backend: Literal["http", "local"],
+    id_key: str = "id",
+    path_key: str = "path",
+    num_clips: int = -1,
+) -> nn.Module:
+    """
+    Takes in a whole video and returns a tensor of shape (num_clips, num_crops, num_channels, clip_len, crop_h, crop_w) = (num_clips, num_crops, 3, 32, 224, 224).
+    """
+
+    preprocessing_cfg["io_backend"] = io_backend
+    preprocessing_cfg["id_key"] = id_key
+    preprocessing_cfg["path_key"] = path_key
+    preprocessing_cfg["num_clips"] = num_clips
+    preprocessing_cfg["batch_size"] = batch_size
+
+    pipeline = [
+        custom_transforms.AdaptDataFormat(
+            id_key=preprocessing_cfg["id_key"],
+            path_key=preprocessing_cfg["path_key"],
+        ),
+        custom_transforms.VideoReaderInit(io_backend=preprocessing_cfg["io_backend"]),
+        custom_transforms.TemporalClipSample(
+            clip_len=preprocessing_cfg["clip_len"],
+            sampling_rate=preprocessing_cfg["sampling_rate"],
+            num_clips=preprocessing_cfg["num_clips"],
+        ),
+        custom_transforms.ClipsBatching(batch_size=preprocessing_cfg["batch_size"]),
+    ]
+
+    return tv_transforms.Compose(pipeline)
+
+
+def build_clip_pipeline(
+    crop_type: Literal["10-crop", "5-crop", "center"] = "5-crop",
+) -> nn.Module:
+    """
+    Takes in a whole video and returns a tensor of shape (num_clips, num_crops, num_channels, clip_len, crop_h, crop_w) = (num_clips, num_crops, 3, 32, 224, 224).
+    """
+
+    preprocessing_cfg["crop_type"] = crop_type
+
+    crop_type_config = {
+        "5-crop": custom_transforms.FiveCrop,
+        "10-crop": custom_transforms.TenCrop,
+        "center": custom_transforms.CenterCrop,
+    }
+
+    pipeline = [
+        custom_transforms.VideoDecode(),
+        custom_transforms.Resize(size=preprocessing_cfg["resize_size"]),
+        crop_type_config[preprocessing_cfg["crop_type"]](
+            size=preprocessing_cfg["crop_size"]
+        ),
+        custom_transforms.ToDType(dtype=torch.float32, scale=True),
+        custom_transforms.Normalize(
+            mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]
+        ),
+        custom_transforms.ConvertTCHWToCTHW(lead_dims=2),
+        custom_transforms.PackInputs(preserved_meta=["id", "filename", "batch_id"]),
+    ]
+
+    return tv_transforms.Compose(pipeline)
+
+
+def build_end2end_pipeline(
     io_backend: Literal["http", "local"],
     id_key: str = "id",
     path_key: str = "path",

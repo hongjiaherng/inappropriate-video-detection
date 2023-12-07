@@ -1,6 +1,6 @@
 import io
 import urllib
-from typing import Dict, Literal, Sequence, Union
+from typing import Dict, Literal, Sequence, Union, List
 
 import decord
 import numpy as np
@@ -164,7 +164,7 @@ class TemporalClipSample(torch.nn.Module):
 
         frame_indices = np.arange(
             0, max_num_clips * self.clip_len * self.sampling_rate, self.sampling_rate
-        )
+        ).reshape(max_num_clips, self.clip_len)
         # len of (num_clips * clip_len)
 
         result["meta"]["frame_indices"] = frame_indices  # (num_clips * clip_len,)
@@ -176,6 +176,49 @@ class TemporalClipSample(torch.nn.Module):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(clip_len={self.clip_len}, num_clips={self.num_clips}, sampling_rate={self.sampling_rate})"
+
+
+class ClipsBatching(torch.nn.Module):
+    """
+    Required keys:
+    ```
+    * meta.frame_indices: np.ndarray # (num_clips, clip_len)
+    ```
+    """
+
+    def __init__(self, batch_size: int):
+        super().__init__()
+        self.batch_size = batch_size
+
+    def forward(self, result: Dict) -> List[Dict]:  # list of batch
+        results = []
+        frame_indices = result["meta"]["frame_indices"]
+
+        for batch_id, batch_start_idx in enumerate(
+            range(0, frame_indices.shape[0], self.batch_size)
+        ):
+            batch_frame_indices = frame_indices[
+                batch_start_idx : batch_start_idx + self.batch_size
+            ]
+            batch_num_clips = batch_frame_indices.shape[0]
+
+            batch_result = {
+                "meta": {
+                    meta_key: result["meta"][meta_key]
+                    for meta_key in result["meta"].keys()
+                    if meta_key not in {"frame_indices", "num_clips"}
+                }
+            }
+            batch_result["meta"]["batch_id"] = batch_id
+            batch_result["meta"]["frame_indices"] = batch_frame_indices
+            batch_result["meta"]["num_clips"] = batch_num_clips
+
+            results.append(batch_result)
+
+        return results
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(batch_size={self.batch_size})"
 
 
 class VideoDecode(torch.nn.Module):
@@ -511,7 +554,7 @@ class PackInputs(torch.nn.Module):
     ```
     """
 
-    def __init__(self, preserved_meta: Sequence[str] = ["id", "filename"]):
+    def __init__(self, preserved_meta: Sequence[str] = ["id", "filename", "batch_id"]):
         super().__init__()
         self.preserved_meta = preserved_meta
 

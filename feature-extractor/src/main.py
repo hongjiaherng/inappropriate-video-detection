@@ -338,7 +338,7 @@ def init_model(
             "models.i3d_imagenet-pretrained-r50-nl-dot-product_8xb8-32x2x1-100e_kinetics400-rgb"
         )
         model = i3d.build_model()
-        preprocessing = i3d.build_preprocessing_pipeline(
+        preprocessing = i3d.build_end2end_pipeline(
             io_backend=io_backend,
             num_clips=num_clips_per_video,
             crop_type=crop_type,

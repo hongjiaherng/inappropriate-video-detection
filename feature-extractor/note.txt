@@ -1,0 +1,43 @@
+Extract features steps:
+- get progress (what vidoes left for feature extraction)
+- iterate over dataset
+- for each video sample, check if it's already extracted (based on progress), if not yet, proceed, otherwise skip to next video sample
+- preprocess the video sample into tensor
+- iterate over each clip in the video (clip dimension)
+- for each clip, which contains 5 crops, treat 5 crops as a batch
+- extract features for each clip
+- save a clip feature to disk
+- repeat for next clip, until all clips in the video are processed
+- combine all clip features into a single tensor (video features)
+- save video features to disk
+- repeat for next video
+
+
+In the video prediction endpoint (non-streaming),
+- we take in a whole video, and run preprocessing on it to get clip tensors.
+- iterate over each clip tensor, and for each clip tensor,
+- send it to the model endpoint to get clip embeddings then classification result,
+- model endpoint send response back of a clip
+- then we send the clip result back to the client as SSE, while at the same time, send the next clip to the model endpoint
+- repeat until all clips are processed
+- send a final SSE response to the client to indicate that all clips are processed
+
+In the video prediction endpoint (streaming),
+- we listen to the client video stream, and read in each chunk of video data,
+- run clip preprocessing on it to get a clip tensor.
+- send the clip tensor to the model endpoint to get clip embeddings then classification result,
+- model endpoint send response back of a clip
+- possible related ref: https://stackoverflow.com/questions/76331542/how-to-listen-to-and-decode-an-rtmp-video-stream-with-python
+
+
+- (solved) version issue 
+   - pytorch 2.1.0 -> 2.0.0
+   - torchvision 0.16.0 -> 0.15.1
+   - e.g., AttributeError: module 'torchvision.transforms.v2.functional' has no attribute 'to_dtype'
+   - or use google colab (it has the latest version but paid)
+
+- huggingface hub upload commit message?
+
+- Don't load whole video into memory at once?
+   - try see if take clip of variable time step (t) to pass to model, what happen
+   - refer those github repo

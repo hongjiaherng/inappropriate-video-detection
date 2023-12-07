@@ -23,7 +23,7 @@ for dir in all_dirs:
 df = pd.DataFrame(file_infos)
 # Sort the DataFrame by the 'size' column in descending order
 df_sorted = df.sort_values(by="size", ascending=False)
-df_sorted.to_csv("video_size_info.csv", sep=",", index=False)
+df_sorted.to_csv("results/video_size_info.csv", sep=",", index=False)
 
 plt.figure(figsize=(10, 6))
 sns.histplot(
@@ -34,7 +34,7 @@ plt.xticks(range(0, int(df_sorted["size"].max()) + 1, 50))
 plt.xlabel("Size (in MB)")
 plt.ylabel("Frequency")
 plt.grid(axis="y", linestyle="--", alpha=0.7)
-plt.savefig("video_size_distribution.png")
+plt.savefig("results/video_size_distribution.png")
 
 # Create a box plot
 plt.figure(figsize=(12, 6))
@@ -42,7 +42,7 @@ sns.boxplot(x=df_sorted["size"], color="skyblue")
 plt.xticks(range(0, int(df_sorted["size"].max()) + 1, 50))
 plt.title("Box Plot of Video Size Distribution")
 plt.xlabel("Size (in MB)")
-plt.savefig("video_size_boxplot.png")
+plt.savefig("results/video_size_boxplot.png")
 
 i3d_rgb_list = fs.glob("datasets/jherng/xd-violence/data/i3d_rgb/**.npy")
 i3d_rgb_list = [
@@ -53,7 +53,7 @@ i3d_rgb_list = [
 print(len(i3d_rgb_list))
 print(i3d_rgb_list)
 
-with open("progress.txt", "w", encoding="utf-8") as f:
+with open("results/progress.txt", "w", encoding="utf-8") as f:
     f.write("\n".join(i3d_rgb_list))
 
 i3d_rgb_list = fs.glob("datasets/jherng/xd-violence/data/video/**.mp4")
@@ -65,5 +65,5 @@ i3d_rgb_list = [
 print(len(i3d_rgb_list))
 print(i3d_rgb_list)
 
-with open("videos.txt", "w", encoding="utf-8") as f:
+with open("results/videos.txt", "w", encoding="utf-8") as f:
     f.write("\n".join(i3d_rgb_list))

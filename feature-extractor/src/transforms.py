@@ -138,7 +138,7 @@ class TemporalClipSample(torch.nn.Module):
 
     Resulting keys (unspecified keys are preserved):
     ```
-    + meta.frame_indices: np.ndarray  # (num_clips * clip_len,)
+    + meta.frame_indices: np.ndarray  # (num_clips, clip_len)
     + meta.num_clips: int
     + meta.clip_len: int
     + meta.sampling_rate: int
@@ -165,9 +165,9 @@ class TemporalClipSample(torch.nn.Module):
         frame_indices = np.arange(
             0, max_num_clips * self.clip_len * self.sampling_rate, self.sampling_rate
         ).reshape(max_num_clips, self.clip_len)
-        # len of (num_clips * clip_len)
+        # (num_clips, clip_len)
 
-        result["meta"]["frame_indices"] = frame_indices  # (num_clips * clip_len,)
+        result["meta"]["frame_indices"] = frame_indices  # (num_clips, clip_len)
         result["meta"]["num_clips"] = max_num_clips
         result["meta"]["clip_len"] = self.clip_len
         result["meta"]["sampling_rate"] = self.sampling_rate
@@ -180,10 +180,19 @@ class TemporalClipSample(torch.nn.Module):
 
 class ClipsBatching(torch.nn.Module):
     """
+    Batching the frame indices of clips into batches of frame indices of clips.
+    Take in a Dict, return a list of Dict where each Dict is a batch.
+
     Required keys:
     ```
     * meta.frame_indices: np.ndarray # (num_clips, clip_len)
     ```
+
+    Resulting keys (unspecified keys are preserved):
+    ~ meta.frame_indices: np.ndarray  # (num_clips * clip_len,)
+    ~ meta.num_clips: int
+    + meta.batch_id: int
+
     """
 
     def __init__(self, batch_size: int):

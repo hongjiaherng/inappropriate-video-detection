@@ -1,6 +1,7 @@
 import argparse
 import os
 import shutil
+import glob
 
 from huggingface_hub import HfApi
 
@@ -13,6 +14,7 @@ def main(args):
     path_in_repo = args.path_in_repo
     remove_after_uploading = bool(args.remove_after_uploading)
     hf_token = args.hf_token
+    n_files = len(glob.glob(os.path.join(feature_dir, "**/*.npy"), recursive=True))
 
     api = HfApi(token=hf_token)
 
@@ -21,6 +23,7 @@ def main(args):
         path_in_repo=path_in_repo,
         repo_id=hf_dataset_name,
         repo_type="dataset",
+        commit_message=f"Uploading {n_files} rgb features",
     )
     print(uploaded_url)
 

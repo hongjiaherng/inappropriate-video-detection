@@ -5,6 +5,7 @@
 for i in {1..40}; do
     echo "Running iteration $i"
     python src/main.py \
+        --batch_size=32 \
         --hf_dataset=jherng/xd-violence \
         --output_dir=data/outputs/i3d_rgb \
         --model=i3d_imagenet-pretrained-r50-nl-dot-product_8xb8-32x2x1-100e_kinetics400-rgb \
@@ -24,6 +25,7 @@ done
 
 echo "Running final iteration to clear up incomplete videos"
 python src/main.py \
+    --batch_size=32 \
     --hf_dataset=jherng/xd-violence \
     --output_dir=data/outputs/i3d_rgb \
     --model=i3d_imagenet-pretrained-r50-nl-dot-product_8xb8-32x2x1-100e_kinetics400-rgb \

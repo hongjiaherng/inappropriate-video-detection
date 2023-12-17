@@ -71,7 +71,7 @@ def init_hf_dataset(
         ).map(
             remove_columns=[
                 "binary_target",
-                "multilabel_targets",
+                "multilabel_target",
                 "frame_annotations",
             ]
         )  # Remove unused columns for preprocessing
@@ -81,7 +81,7 @@ def init_hf_dataset(
         ).map(
             remove_columns=[
                 "binary_target",
-                "multilabel_targets",
+                "multilabel_target",
                 "frame_annotations",
             ]
         )

@@ -35,9 +35,10 @@ In the video prediction endpoint (streaming),
    - torchvision 0.16.0 -> 0.15.1
    - e.g., AttributeError: module 'torchvision.transforms.v2.functional' has no attribute 'to_dtype'
    - or use google colab (it has the latest version but paid)
+   - huggingface hub upload commit message?
+   - Don't load whole video into memory at once?
+      - try see if take clip of variable time step (t) to pass to model, what happen
+      - refer those github repo
 
-- huggingface hub upload commit message?
-
-- Don't load whole video into memory at once?
-   - try see if take clip of variable time step (t) to pass to model, what happen
-   - refer those github repo
+TODO:
+- solve out-of-memory issue by saving frames of video into temp folder first, then read from fs when needed (currently, using decord video reader)

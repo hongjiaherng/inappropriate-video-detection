@@ -17,7 +17,7 @@ def forward_batch(
 ) -> np.ndarray:
     with torch.no_grad():
         batch = batch.to(device)  # (batch_size, C, T, H, W)
-        batch = model(batch).detach().cpu().numpy()
+        batch = model(batch).cpu().numpy()
 
     return batch  # (batch_size, 2042)
 

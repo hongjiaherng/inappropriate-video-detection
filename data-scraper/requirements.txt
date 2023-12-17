@@ -1,0 +1,13 @@
+googletrans==3.1.0a0
+google-api-python-client==2.103.0
+google-auth-httplib2==0.1.1
+yt-dlp==2023.10.13
+tiktokapi==5.2.2
+playwright==1.30.0
+beautifulsoup4==4.12.2
+numpy
+pandas
+matplotlib
+tqdm
+ipykernel
+python-dotenv

@@ -264,6 +264,7 @@ class VideoDecode(torch.nn.Module):
         clip_len = result["meta"]["clip_len"]
 
         clips = container.get_batch(frame_indices).asnumpy()  # (N*T, H, W, C)
+        container.seek(0) # reset container to the beginning (https://github.com/dmlc/decord/issues/197)
         clips = torch.tensor(clips, dtype=torch.uint8)
         clips = torch.permute(clips, (0, 3, 1, 2))  # (N*T, C, H, W)
         clips = torch.reshape(

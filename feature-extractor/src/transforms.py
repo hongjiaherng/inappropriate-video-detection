@@ -278,8 +278,7 @@ class VideoDecode(torch.nn.Module):
         # free memory of video_reader, frame_indices
         result["meta"].pop("video_reader")
         result["meta"].pop("frame_indices")
-        del frame_indices
-        del clips
+        del frame_indices, container
 
         return result
 

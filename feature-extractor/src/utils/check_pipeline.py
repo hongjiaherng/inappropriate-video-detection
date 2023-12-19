@@ -12,7 +12,7 @@ import torchvision
 
 torchvision.disable_beta_transforms_warning()
 
-import torchvision.transforms.v2 as transforms  # noqa: E402
+import torchvision.transforms.v2 as tv_transforms  # noqa: E402
 
 ROOT_PATH = os.path.abspath(os.path.join(__file__, "../../.."))
 
@@ -52,37 +52,37 @@ def run():
     # Initialize dataset
     dataset, _ = dataset_utils.init_hf_dataset(hf_dataset_name, progress)
 
-    video2clips = transforms.Compose(
+    video2clips = tv_transforms.Compose(
         [
-            transforms_new.AdaptDataFormat(id_key="id", path_key="path"),
-            transforms_new.VideoReaderInit(io_backend="http"),
-            transforms_new.TemporalClipSample(
+            custom_transforms.AdaptDataFormat(id_key="id", path_key="path"),
+            custom_transforms.VideoReaderInit(io_backend="http"),
+            custom_transforms.TemporalClipSample(
                 clip_len=clip_len,
                 sampling_rate=sampling_rate,
                 num_clips=num_clips_per_video,
             ),
-            transforms_new.ClipBatching(batch_size=batch_size),
-            transforms_new.BatchDecodeIter(),
+            custom_transforms.ClipBatching(batch_size=batch_size),
+            custom_transforms.BatchDecodeIter(),
         ]
     )
 
-    crop = transforms_new.CenterCrop(size=224)
+    crop = custom_transforms.CenterCrop(size=224)
     if crop_type == "5-crop":
-        crop = transforms_new.FiveCrop(size=224)
+        crop = custom_transforms.FiveCrop(size=224)
     elif crop_type == "10-crop":
-        crop = transforms_new.TenCrop(size=224)
+        crop = custom_transforms.TenCrop(size=224)
 
-    clip2tensor = transforms.Compose(
+    clip2tensor = tv_transforms.Compose(
         [
-            transforms_new.Resize(size=256),
+            custom_transforms.Resize(size=256),
             crop,  # either 5-crop, 10-crop or center
-            transforms_new.ToDType(dtype=torch.float32, scale=True),
-            transforms_new.Normalize(
+            custom_transforms.ToDType(dtype=torch.float32, scale=True),
+            custom_transforms.Normalize(
                 mean=(0.485, 0.456, 0.406),
                 std=(0.229, 0.224, 0.225),
             ),
-            transforms_new.ConvertTCHWToCTHW(lead_dims=2),
-            transforms_new.PackInputs(preserved_meta=["id", "filename", "batch_id"]),
+            custom_transforms.ConvertTCHWToCTHW(lead_dims=2),
+            custom_transforms.PackInputs(preserved_meta=["id", "filename", "batch_id"]),
         ]
     )
 
@@ -160,6 +160,6 @@ def run():
 if __name__ == "__main__":
     sys.path.append(os.path.abspath(os.path.join(__file__, "../..")))
     import dataset_utils
-    import transforms_new
+    import transforms as custom_transforms
 
     run()

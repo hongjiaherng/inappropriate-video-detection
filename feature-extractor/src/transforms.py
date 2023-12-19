@@ -1,10 +1,9 @@
 import io
+import gc
 import urllib
-from typing import Dict, Literal, Sequence, Union, List
+from typing import Dict, Literal, Sequence, Union, Iterator
 
 import decord
-import cv2
-import numpy as np
 import torch
 import torchvision
 import torchvision.transforms.v2.functional as F
@@ -88,27 +87,47 @@ class VideoReaderInit(torch.nn.Module):
     Resulting keys (unspecified keys are preserved):
     ```
     + meta.total_frames: int
-    + meta.video_reader: decord.video_reader.VideoReader
+    + meta.video_reader: decord.VideoReader
     + meta.avg_fps: float
     ```
 
     """
 
+    def __init__(self, io_backend: Literal["http", "local"]):
+        super().__init__()
+        self.io_backend = io_backend
+
     def forward(self, result: Dict) -> Dict:
         container = self._get_video_reader(result["meta"]["filename"])
-        result["meta"]["total_frames"] = int(container.get(cv2.CAP_PROP_FRAME_COUNT))
+        result["meta"]["total_frames"] = len(container)
         result["meta"]["video_reader"] = container
-        result["meta"]["avg_fps"] = container.get(cv2.CAP_PROP_FPS)
+        result["meta"]["avg_fps"] = container.get_avg_fps()
 
         return result
 
-    def _get_video_reader(self, filename: str) -> cv2.VideoCapture:
-        container = cv2.VideoCapture(filename)
+    def _get_video_reader(self, filename: str) -> decord.VideoReader:
+        buf = self._get_buffer(filename)
+        f_obj = io.BytesIO(buf)
+        container = decord.VideoReader(f_obj)
 
-        if not container.isOpened():
-            raise ValueError(f"Unable to open video file: {filename}")
+        f_obj.close()
 
         return container
+
+    def _get_buffer(self, fpath: str) -> bytes:
+        if self.io_backend == "http":
+            return urllib.request.urlopen(fpath).read()
+        elif self.io_backend == "local":
+            with open(fpath, "rb") as f:
+                return f.read()
+        else:
+            raise ValueError(
+                f'io_backend="{self.io_backend}" is not supported. Please use "http" or "local" instead.'
+            )
+
+    def __repr__(self) -> str:
+        repr_str = f"{self.__class__.__name__}(io_backend={self.io_backend})"
+        return repr_str
 
 
 class TemporalClipSample(torch.nn.Module):
@@ -122,7 +141,7 @@ class TemporalClipSample(torch.nn.Module):
 
     Resulting keys (unspecified keys are preserved):
     ```
-    + meta.frame_indices: np.ndarray  # (num_clips, clip_len)
+    + meta.frame_indices: range  # len of (num_clips * clip_len,)
     + meta.num_clips: int
     + meta.clip_len: int
     + meta.sampling_rate: int
@@ -161,10 +180,9 @@ class TemporalClipSample(torch.nn.Module):
         return f"{self.__class__.__name__}(clip_len={self.clip_len}, num_clips={self.num_clips}, sampling_rate={self.sampling_rate})"
 
 
-class ClipsBatching(torch.nn.Module):
+class ClipBatching(torch.nn.Module):
     """
     Batching the frame indices of clips into batches of frame indices of clips.
-    Take in a Dict, return a list of Dict where each Dict is a batch.
 
     Required keys:
     ```
@@ -172,9 +190,14 @@ class ClipsBatching(torch.nn.Module):
     ```
 
     Resulting keys (unspecified keys are preserved):
-    ~ meta.frame_indices: range # (batch_size * clip_len,)
-    ~ meta.num_clips: int
-    + meta.batch_id: int
+    ```
+    + meta.batch_data: List[{
+        "batch_id": int,
+        "frame_indices": range,  # len of (batch_size * clip_len,)
+        "num_clips": int,
+    }] # len (num_batches, )
+    - meta.frame_indices: range  # len of (num_clips * clip_len,)
+    ```
 
     """
 
@@ -182,11 +205,12 @@ class ClipsBatching(torch.nn.Module):
         super().__init__()
         self.batch_size = batch_size
 
-    def forward(self, result: Dict) -> List[Dict]:  # list of batch
-        results = []
+    def forward(self, result: Dict):
         frame_indices = result["meta"]["frame_indices"]
         clip_len = result["meta"]["clip_len"]
         num_clips = len(frame_indices) // clip_len
+
+        batch_data_list = []
 
         for batch_id, batch_start_idx in enumerate(
             range(0, num_clips, self.batch_size)
@@ -195,79 +219,124 @@ class ClipsBatching(torch.nn.Module):
                 batch_start_idx
                 * clip_len : (batch_start_idx + self.batch_size)
                 * clip_len
-            ]
+            ]  # (batch_size * clip_len, )
             batch_num_clips = len(batch_frame_indices) // clip_len
 
-            batch_result = {
-                "meta": {
-                    meta_key: result["meta"][meta_key]
-                    for meta_key in result["meta"].keys()
-                    if meta_key not in {"frame_indices", "num_clips"}
-                }
+            batch_data = {
+                "batch_id": batch_id,
+                "frame_indices": batch_frame_indices,
+                "num_clips": batch_num_clips,
             }
-            batch_result["meta"]["batch_id"] = batch_id
-            batch_result["meta"]["frame_indices"] = batch_frame_indices
-            batch_result["meta"]["num_clips"] = batch_num_clips
 
-            results.append(batch_result)
+            batch_data_list.append(batch_data)
 
-        return results
+        # Add the batch_data_list to the meta dictionary
+        result["meta"]["batch_data"] = batch_data_list
+
+        result["meta"].pop("frame_indices")  # pop the video level frame indices
+
+        return result
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(batch_size={self.batch_size})"
 
 
-class VideoDecode(torch.nn.Module):
+class BatchDecodeIter(torch.nn.Module):
+
     """
     Decodes video clips based on frame indices from a given VideoReader.
 
     Required keys:
     ```
-    * meta.video_reader: decord.video_reader.VideoReader
-    * meta.frame_indices: np.ndarray  # (num_clips * clip_len,)
-    * meta.num_clips: int
+    * meta.batch_data: List[{
+        "batch_id": int,
+        "frame_indices": range,  # (batch_size * clip_len,)
+        "num_clips": int,
+    }] # len (num_batches, )
+    * meta.video_reader: decord.VideoReader
     * meta.clip_len: int
     ```
 
     Resulting keys (unspecified keys are preserved):
     ```
-    + inputs: torch.Tensor  # (num_clips, clip_len, C, H, W)
-    + meta.original_frame_shape: Tuple[int, int]
+    + inputs: torch.Tensor  # (batch_size = num_clips, clip_len, C, H, W)
+    + meta.batch_id: int
     + meta.frame_shape: Tuple[int, int]
+    + meta.original_frame_shape: Tuple[int, int]
+    +/~ meta.num_clips: int
+    +/~ meta.total_frames: int
+    - meta.batch_data: List[{
+        "batch_id": int,
+        "frame_indices": range,  # (batch_size * clip_len,)
+        "num_clips": int,
+    }] # len (num_batches, )
     - meta.video_reader: decord.video_reader.VideoReader
-    - meta.frame_indices: np.ndarray  # (num_clips * clip_len,)
     ```
     """
 
-    def forward(self, result: Dict) -> Dict:
-        container = result["meta"]["video_reader"]
-        frame_indices = result["meta"]["frame_indices"]
-        num_clips = result["meta"]["num_clips"]
-        clip_len = result["meta"]["clip_len"]
+    def __init__(self):
+        super().__init__()
+        self.batch_data_list = None
+        self.vr = None
+        self.misc_meta = None
+        self.clip_len = None
+        self.current_batch_index = 0
 
-        clips = []
-        for idx in frame_indices:
-            container.set(cv2.CAP_PROP_POS_FRAMES, idx)
-            ret, frame = container.read()
-            if ret:
-                clips.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            else:
-                raise ValueError(f"Unable to read frame {idx} from video.")
+    def __iter__(self) -> Iterator[Dict]:
+        return self
 
-        clips = np.stack(clips)  # (N*T, H, W, C)
-        clips = torch.tensor(clips, dtype=torch.uint8)
-        clips = torch.permute(clips, (0, 3, 1, 2))  # (N*T, C, H, W)
-        clips = torch.reshape(
-            clips, (num_clips, clip_len, *clips.shape[1:])
+    def __next__(self) -> Dict:
+        if (
+            self.batch_data_list is None
+            or self.vr is None
+            or self.current_batch_index == len(self.batch_data_list)
+        ):
+            del self.vr, self.batch_data_list, self.misc_meta, self.clip_len
+            gc.collect()
+
+            raise StopIteration
+
+        batch_in = self.batch_data_list[self.current_batch_index]
+        frame_indices = batch_in["frame_indices"]
+
+        # reset container to the beginning (https://github.com/dmlc/decord/issues/197)
+        self.vr.seek(0)
+        inputs = self.vr.get_batch(frame_indices).asnumpy()  # (N*T, H, W, C)
+        inputs = torch.tensor(inputs, dtype=torch.uint8)
+        inputs = torch.permute(inputs, (0, 3, 1, 2))  # (N*T, C, H, W)
+        inputs = torch.reshape(
+            inputs, (batch_in["num_clips"], self.clip_len, *inputs.shape[1:])
         )  # (N, T, C, H, W)
 
-        result["inputs"] = clips
-        result["meta"]["original_frame_shape"] = tuple(clips.shape[-2:])
-        result["meta"]["frame_shape"] = tuple(clips.shape[-2:])
+        batch_out = {
+            "inputs": inputs,
+            "meta": {
+                **self.misc_meta,  # Add the remaining keys from result
+                "batch_id": batch_in["batch_id"],
+                "num_clips": batch_in["num_clips"],
+                "original_frame_shape": tuple(inputs.shape[-2:]),
+                "frame_shape": tuple(inputs.shape[-2:]),
+                "total_frames": len(frame_indices),  # update total frames in a batch
+            },
+        }
 
-        # free memory of video_reader, frame_indices
-        result["meta"].pop("video_reader")
-        result["meta"].pop("frame_indices")
-        del container, frame_indices
+        self.current_batch_index += 1
 
-        return result
+        return batch_out
+
+    def forward(self, result: Dict):
+        self.batch_data_list = result["meta"]["batch_data"]
+        self.clip_len = result["meta"]["clip_len"]
+        self.vr = result["meta"]["video_reader"]
+        # remaining keys from result
+        self.misc_meta = {
+            k: v
+            for k, v in result["meta"].items()
+            if k not in {"batch_data", "video_reader"}
+        }
+        self.current_batch_index = 0
+
+        return iter(self)
 
 
 class Resize(torch.nn.Module):

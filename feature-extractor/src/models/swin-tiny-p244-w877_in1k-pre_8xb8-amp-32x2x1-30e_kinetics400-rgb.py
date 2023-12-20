@@ -198,7 +198,7 @@ def build_clip_pipeline(
             mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]
         ),
         my_transforms.ConvertTCHWToCTHW(lead_dims=2),
-        my_transforms.PackInputs(preserved_meta=["id", "filename", "batch_id"]),
+        my_transforms.PackInputs(preserved_meta=[]),
     ]
 
     return tv_transforms.Compose(pipeline)
@@ -272,7 +272,7 @@ def build_end2end_pipeline(
             mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]
         ),
         my_transforms.ConvertTCHWToCTHW(lead_dims=2),
-        my_transforms.PackInputs(preserved_meta=["id", "filename"]),
+        my_transforms.PackInputs(preserved_meta=[]),
     ]
 
     return tv_transforms.Compose(pipeline)

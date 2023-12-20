@@ -23,7 +23,7 @@ def run():
 
     clip_len = 32
     sampling_rate = 2
-    batch_size = 16
+    batch_size = 4
     hf_dataset_name = "jherng/xd-violence"
     model_name = (
         "i3d_imagenet-pretrained-r50-nl-dot-product_8xb8-32x2x1-100e_kinetics400-rgb"
@@ -35,7 +35,7 @@ def run():
     check_progress = Path(os.path.join(ROOT_PATH, "results", "progress.txt")).as_posix()
 
     # Check current progress
-    progress = dataset_utils.get_progress(output_dir, check_progress)
+    progress = set()  # dataset_utils.get_progress(output_dir, check_progress)
 
     print(f"{output_dir=}")
     print(f"{temp_dir=}")

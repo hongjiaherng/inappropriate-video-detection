@@ -22,99 +22,128 @@ def forward_batch(
     return batch  # (batch_size, 2042)
 
 
-def extract_features(
-    video_ex: Dict,
+def extract_one_off(
+    video_dict: Dict,
     model: nn.Module,
     preprocessing: Union[Dict[str, nn.Module], nn.Module],
     device: torch.device,
     temp_dir: str,
 ) -> np.ndarray:
-    os.makedirs(temp_dir, exist_ok=True)
-    video_id = video_ex["id"]
-    try:
-        if isinstance(preprocessing, dict):
-            # a list of unrealized tensor of (batch_size, n_crops, C, T, H, W)
-            batches = preprocessing["video2clips"](video_ex)
-            num_batches = len(batches)
+    """
+    video_dict: Dict[str, str] = {"id": str, "path": str}
 
-            for batch_idx in tqdm.tqdm(
-                range(num_batches),
-                desc=f'Processing clips of "{video_id}"',
-                unit="batch of clips",
-                position=1,
-                leave=False,
-                colour="green",
-            ):
-                # (batch_size, n_crops, C, T, H, W)
-                batch = preprocessing["clip_preprocessing"](batches[batch_idx])[
-                    "inputs"
-                ]
-                # Putting n_crops as first dimension
-                batch = torch.permute(batch, (1, 0, 2, 3, 4, 5))
-                batch_emb = []
+    """
+    video_in = preprocessing(video_dict)["inputs"]  # (N, n_crops, C, T, H, W)
+    num_clips = video_in.size()[0]
 
-                # extract crop-by-crop
-                for crop in range(batch.size()[0]):
-                    # (batch_size, C, T, H, W) -> (batch_size, 2042)
-                    batch_crop = forward_batch(batch[crop], model, device)
-                    batch_emb.append(batch_crop)
+    for clip_idx in tqdm.tqdm(
+        range(num_clips),
+        desc=f'Processing clips of "{video_dict["id"]}"',
+        unit="clip",
+        position=1,
+        leave=False,
+        colour="green",
+    ):
+        # treat n crops as a batch
+        batch_in = video_in[clip_idx]  # (n_crops, C, T, H, W)
+        batch_out = forward_batch(batch_in, model, device)  # (n_crops, 2042)
 
-                # combine list of batch_crop into a single batch_emb
-                # list of (batch_size, 2042) -> (batch_size, n_crops, 2042)
-                batch_emb = np.stack(batch_emb, axis=1)
+        np.save(os.path.join(temp_dir, f"{video_dict['id']}_{clip_idx}.npy"), batch_out)
 
-                np.save(
-                    os.path.join(temp_dir, f"{video_id}_{batch_idx}.npy"), batch_emb
-                )
+        del batch_in, batch_out
+        gc.collect()
 
-                # free up memory
-                del batch, batch_emb, batch_crop
-                gc.collect()
+    del video_in
+    gc.collect()
 
-            # combine all clip features of a video into a single tensor (video features)
-            # list of (batch_size, n_crops, 2042) -> (n_clips, n_crops, 2042)
-            video_emb = np.concatenate(
-                [
-                    np.load(os.path.join(temp_dir, f"{video_id}_{batch_idx}.npy"))
-                    for batch_idx in range(num_batches)
-                ],
-                axis=0,
+    # combine all clip features of a video into a single tensor (video features)
+    video_emb = np.stack(
+        [
+            np.load(os.path.join(temp_dir, f"{video_dict['id']}_{clip_idx}.npy"))
+            for clip_idx in range(num_clips)
+        ],
+        axis=0,
+    )  # list of (n_crops, 2042) -> (n_clips, n_crops, 2042)
+
+    return video_emb
+
+
+def extract_by_batches(
+    video_dict: Dict,
+    model: nn.Module,
+    preprocessing: Union[Dict[str, nn.Module], nn.Module],
+    device: torch.device,
+    temp_dir: str,
+) -> np.ndarray:
+    """
+    video_dict: Dict[str, str] = {"id": str, "path": str}
+    """
+    batch_iter = preprocessing["video"](video_dict)
+    num_batches = len(batch_iter)
+
+    for batch_idx, batch_dict in tqdm.tqdm(
+        enumerate(batch_iter),
+        total=num_batches,
+        desc=f'Processing clips of "{video_dict["id"]}"',
+        unit="batch of clips",
+        position=1,
+        leave=False,
+        colour="green",
+    ):
+        # {"inputs": torch.Size([B, T, C, H, W]), "meta": Dict[str, Any]} -> {"inputs": torch.Size([B, n_crops, C, T, H, W]), "meta": Dict[str, Any]}
+        batch_dict = preprocessing["clip"](batch_dict)
+        batch_in = torch.permute(
+            batch_dict["inputs"], (1, 0, 2, 3, 4, 5)
+        )  # (B, n_crops, C, T, H, W) -> (n_crops, B, C, T, H, W)
+        batch_out = []
+
+        for crop_idx in range(batch_in.size()[0]):
+            batch_out.append(
+                forward_batch(batch_in[crop_idx], model, device)  # (B, 2042)
             )
 
-            del batches
+        batch_out = np.stack(batch_out, axis=1)  # (B, n_crops, 2042)
 
+        np.save(
+            os.path.join(temp_dir, f"{video_dict['id']}_{batch_idx}.npy"), batch_out
+        )
+
+        del batch_in, batch_out, batch_dict
+        gc.collect()
+
+    del batch_iter
+    gc.collect()
+
+    # combine all clip features of a video into a single tensor (video features)
+    video_emb = np.concatenate(
+        [
+            np.load(os.path.join(temp_dir, f"{video_dict['id']}_{batch_idx}.npy"))
+            for batch_idx in range(num_batches)
+        ],
+        axis=0,
+    )  # (N, n_crops, 2042)
+
+    return video_emb
+
+
+def extract_features(
+    video_dict: Dict,
+    model: nn.Module,
+    preprocessing: Union[Dict[str, nn.Module], nn.Module],
+    device: torch.device,
+    temp_dir: str,
+) -> np.ndarray:
+    try:
+        os.makedirs(temp_dir, exist_ok=True)
+
+        if isinstance(preprocessing, dict):
+            video_emb = extract_by_batches(
+                video_dict, model, preprocessing, device, temp_dir
+            )
         else:
-            # realized tensor of (num_clips, n_crops, C, T, H, W), loaded into memory
-            video_ex = preprocessing(video_ex)
-            num_clips = video_ex["inputs"].size()[0]
-
-            for clip_idx in tqdm.tqdm(
-                range(num_clips),
-                desc=f'Processing clips of "{video_id}"',
-                unit="clip",
-                position=1,
-                leave=False,
-                colour="green",
-            ):
-                # treat n crops as a batch
-                batch = video_ex["inputs"][clip_idx]  # (n_crops, C, T, H, W)
-                batch_emb = forward_batch(batch, model, device)  # (n_crops, 2042)
-
-                np.save(os.path.join(temp_dir, f"{video_id}_{clip_idx}.npy"), batch_emb)
-
-                del batch, batch_emb
-                gc.collect()
-
-            # combine all clip features of a video into a single tensor (video features)
-            video_emb = np.stack(
-                [
-                    np.load(os.path.join(temp_dir, f"{video_id}_{clip_idx}.npy"))
-                    for clip_idx in range(num_clips)
-                ],
-                axis=0,
-            )  # list of (n_crops, 2042) -> (n_clips, n_crops, 2042)
-    except Exception as e:
-        raise e
+            video_emb = extract_one_off(
+                video_dict, model, preprocessing, device, temp_dir
+            )
     finally:
         shutil.rmtree(temp_dir)
 

@@ -282,6 +282,9 @@ class BatchDecodeIter(torch.nn.Module):
         self.clip_len = None
         self.current_batch_index = 0
 
+    def __len__(self) -> int:
+        return len(self.batch_data_list)
+
     def __iter__(self) -> Iterator[Dict]:
         return self
 
@@ -661,9 +664,9 @@ class PackInputs(torch.nn.Module):
 
         if len(meta_to_pop) == len(result["meta"]):
             result.pop("meta")
-
-        for k in meta_to_pop:
-            result["meta"].pop(k)
+        else:
+            for k in meta_to_pop:
+                result["meta"].pop(k)
 
         return result
 

@@ -12,8 +12,9 @@ import torch
 import torch.nn as nn
 import torchvision
 import tqdm.auto as tqdm
-from dataset_utils import get_progress, init_hf_dataset, init_local_dataset
+import dataset_utils
 from extract_features import extract_features
+
 
 ROOT_PATH = os.path.abspath(os.path.join(__file__, "../.."))
 
@@ -61,14 +62,16 @@ def run(args):
     )
 
     # Check current progress
-    progress = get_progress(output_dir, check_progress)
+    progress = dataset_utils.get_progress(output_dir, check_progress)
     logger.info(f"Current progress: {len(progress)} done")
 
     # Init dataset that excludes already done progress
     if hf_dataset_name:
-        ds, extract_relative_dir = init_hf_dataset(hf_dataset_name, progress)
+        ds, extract_relative_dir = dataset_utils.init_hf_dataset(
+            hf_dataset_name, progress
+        )
     else:
-        ds, extract_relative_dir = init_local_dataset(input_dir, progress)
+        ds, extract_relative_dir = dataset_utils.init_local_dataset(input_dir, progress)
 
     logger.info(f"Dataset: {'huggingface' if hf_dataset_name else 'local'}")
 
@@ -87,7 +90,7 @@ def run(args):
     logger.info(f"Preprocessing pipeline: {preprocessing}")
     logger.info(f"Device: {device}")
 
-    for i, video_ex in enumerate(
+    for i, video_dict in enumerate(
         tqdm.tqdm(
             ds,
             desc="Extracting video features",
@@ -103,14 +106,12 @@ def run(args):
             )
             break
 
-        video_path = video_ex["path"]
-        video_id = video_ex["id"]
-        video_reldir = extract_relative_dir(video_path)
-        video_output_dir = os.path.join(output_dir, video_reldir)
+        video_reldir = extract_relative_dir(video_dict["path"])
+        video_out_dir = os.path.join(output_dir, video_reldir)
 
         # Extract features of all clips in the video and concat them into one as a video feature
         video_emb = extract_features(
-            video_ex=video_ex,
+            video_dict=video_dict,
             model=model,
             preprocessing=preprocessing,
             device=device,
@@ -119,15 +120,17 @@ def run(args):
 
         # save video features to output_dir
         # create video output dir if havent exist
-        os.makedirs(video_output_dir, exist_ok=True)
-        np.save(os.path.join(video_output_dir, f"{video_id}.npy"), video_emb)
+        os.makedirs(video_out_dir, exist_ok=True)
+        np.save(os.path.join(video_out_dir, f"{video_dict['id']}.npy"), video_emb)
 
         if check_progress:
             with open(check_progress, mode="a", encoding="utf-8") as f:
-                f.write(f"{Path(os.path.join(video_reldir, video_id)).as_posix()}\n")
+                f.write(
+                    f"{Path(os.path.join(video_reldir, video_dict['id'])).as_posix()}\n"
+                )
 
         # free up memory
-        del video_ex, video_emb
+        del video_dict, video_emb, video_reldir, video_out_dir
         gc.collect()
 
 
@@ -159,12 +162,12 @@ def init_model(
             )
         else:
             preprocessing = {
-                "video2clips": i3d.build_video2clips_pipeline(
+                "video": i3d.build_video2clips_pipeline(
                     batch_size=batch_size,
                     io_backend=io_backend,
                     num_clips=num_clips_per_video,
                 ),
-                "clip_preprocessing": i3d.build_clip_pipeline(crop_type=crop_type),
+                "clip": i3d.build_clip_pipeline(crop_type=crop_type),
             }
 
     elif (
@@ -183,16 +186,16 @@ def init_model(
             )
         else:
             preprocessing = {
-                "video2clips": swin.build_video2clips_pipeline(
+                "video": swin.build_video2clips_pipeline(
                     batch_size=batch_size,
                     io_backend=io_backend,
                     num_clips=num_clips_per_video,
                 ),
-                "clip_preprocessing": swin.build_clip_pipeline(crop_type=crop_type),
+                "clip": swin.build_clip_pipeline(crop_type=crop_type),
             }
     else:
         raise ValueError(
-            f"Model {model_name} not supported. Currently only supports ['i3d_imagenet-pretrained-r50-nl-dot-product_8xb8-32x2x1-100e_kinetics400-rgb']."
+            f"Model {model_name} not supported. Currently only supports ['i3d_imagenet-pretrained-r50-nl-dot-product_8xb8-32x2x1-100e_kinetics400-rgb', 'swin-tiny-p244-w877_in1k-pre_8xb8-amp-32x2x1-30e_kinetics400-rgb']."
         )
 
     return model, preprocessing

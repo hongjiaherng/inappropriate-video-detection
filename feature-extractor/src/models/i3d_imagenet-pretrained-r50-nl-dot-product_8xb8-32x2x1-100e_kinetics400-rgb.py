@@ -8,7 +8,7 @@ from typing import Literal
 import torch
 import torch.nn as nn
 import torchvision.transforms.v2 as tv_transforms
-import transforms as custom_transforms
+import transforms as my_transforms
 from mmaction.registry import MODELS
 
 root_path = os.path.abspath(os.path.join(__file__, "../../.."))  # feature-extractor/
@@ -88,7 +88,34 @@ def build_video2clips_pipeline(
     num_clips: int = -1,
 ) -> nn.Module:
     """
-    Takes in a whole video and returns a tensor of shape (num_clips, num_crops, num_channels, clip_len, crop_h, crop_w) = (num_clips, num_crops, 3, 32, 224, 224).
+    Takes in a whole video and returns an iterator that yields batches of clips
+    where each batch is of shape (B, T, C, H, W) = (B, 32, 3, H, W).
+
+    Expected data structure:
+    ------------------------
+
+    Input:
+    ```
+    {id_key: str, path_key: str}: Dict[str, str]
+    ```
+
+    Output:
+    ```
+    yield {
+        "inputs": torch.Tensor,  # (B, T, C, H, W) = (B, 32, 3, H, W)
+        "meta": {
+            "id": str,
+            "filename": str,
+            "total_frames": int,
+            "avg_fps": float,
+            "sampling_rate": int,
+            "batch_id": int,
+            "num_clips": int,
+            "clip_len": int,
+            "original_frame_shape": Tuple[int, int],
+            "frame_shape": Tuple[int, int],
+        },
+    }: Iterator[Dict[str, Union[torch.Tensor, Dict[str, Any]]]]
     """
 
     preprocessing_cfg["io_backend"] = io_backend
@@ -98,17 +125,18 @@ def build_video2clips_pipeline(
     preprocessing_cfg["batch_size"] = batch_size
 
     pipeline = [
-        custom_transforms.AdaptDataFormat(
+        my_transforms.AdaptDataFormat(
             id_key=preprocessing_cfg["id_key"],
             path_key=preprocessing_cfg["path_key"],
         ),
-        custom_transforms.VideoReaderInit(io_backend=preprocessing_cfg["io_backend"]),
-        custom_transforms.TemporalClipSample(
+        my_transforms.VideoReaderInit(io_backend=preprocessing_cfg["io_backend"]),
+        my_transforms.TemporalClipSample(
             clip_len=preprocessing_cfg["clip_len"],
             sampling_rate=preprocessing_cfg["sampling_rate"],
             num_clips=preprocessing_cfg["num_clips"],
         ),
-        custom_transforms.ClipsBatching(batch_size=preprocessing_cfg["batch_size"]),
+        my_transforms.ClipBatching(batch_size=preprocessing_cfg["batch_size"]),
+        my_transforms.BatchDecodeIter(),
     ]
 
     return tv_transforms.Compose(pipeline)
@@ -118,29 +146,69 @@ def build_clip_pipeline(
     crop_type: Literal["10-crop", "5-crop", "center"] = "5-crop",
 ) -> nn.Module:
     """
-    Takes in a whole video and returns a tensor of shape (num_clips, num_crops, num_channels, clip_len, crop_h, crop_w) = (num_clips, num_crops, 3, 32, 224, 224).
+    Takes in a batch of clips of shape (B, T, C, H, W) = (B, 32, 3, H, W) and returns
+    a preprocessed tensor of shape (B, n_crops, C, T, crop_h, crop_w) = (B, n_crops, 3, 32, 224, 224).
+
+    Expected data structure:
+    ------------------------
+
+    Input:
+    ```
+    {
+        "inputs": torch.Tensor,  # (B, T, C, H, W) = (B, 32, 3, H, W)
+        "meta": {
+            "id": str,
+            "filename": str,
+            "total_frames": int,
+            "avg_fps": float,
+            "sampling_rate": int,
+            "batch_id": int,
+            "num_clips": int,
+            "clip_len": int,
+            "original_frame_shape": Tuple[int, int],
+            "frame_shape": Tuple[int, int],
+        },
+    }: Dict[str, Union[torch.Tensor, Dict[str, Any]]]
+    ```
+
+    Output:
+    ```
+    {
+        "inputs": torch.Tensor,  # (B, n_crops, C, T, crop_h, crop_w) = (B, n_crops, 3, 32, 224, 224)
+        "meta": {
+            "id": str,
+            "filename": str,
+            "batch_id": int,
+        },
+    }: Dict[str, Union[torch.Tensor, Dict[str, Any]]]
+    ```
+
     """
+
+    def crop_func(crop_type: Literal["10-crop", "5-crop", "center"], size: int):
+        if crop_type == "5-crop":
+            return my_transforms.FiveCrop(size=size)
+        elif crop_type == "10-crop":
+            return my_transforms.TenCrop(size=size)
+        elif crop_type == "center":
+            return my_transforms.CenterCrop(size=size)
+        else:
+            raise ValueError(f"Invalid crop_type: {crop_type}")
 
     preprocessing_cfg["crop_type"] = crop_type
 
-    crop_type_config = {
-        "5-crop": custom_transforms.FiveCrop,
-        "10-crop": custom_transforms.TenCrop,
-        "center": custom_transforms.CenterCrop,
-    }
-
     pipeline = [
-        custom_transforms.VideoDecode(),
-        custom_transforms.Resize(size=preprocessing_cfg["resize_size"]),
-        crop_type_config[preprocessing_cfg["crop_type"]](
-            size=preprocessing_cfg["crop_size"]
+        my_transforms.Resize(size=preprocessing_cfg["resize_size"]),
+        crop_func(
+            crop_type=preprocessing_cfg["crop_type"],
+            size=preprocessing_cfg["crop_size"],
         ),
-        custom_transforms.ToDType(dtype=torch.float32, scale=True),
-        custom_transforms.Normalize(
+        my_transforms.ToDType(dtype=torch.float32, scale=True),
+        my_transforms.Normalize(
             mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]
         ),
-        custom_transforms.ConvertTCHWToCTHW(lead_dims=2),
-        custom_transforms.PackInputs(preserved_meta=["id", "filename", "batch_id"]),
+        my_transforms.ConvertTCHWToCTHW(lead_dims=2),
+        my_transforms.PackInputs(preserved_meta=["id", "filename", "batch_id"]),
     ]
 
     return tv_transforms.Compose(pipeline)
@@ -154,8 +222,37 @@ def build_end2end_pipeline(
     crop_type: Literal["10-crop", "5-crop", "center"] = "5-crop",
 ) -> nn.Module:
     """
-    Takes in a whole video and returns a tensor of shape (num_clips, num_crops, num_channels, clip_len, crop_h, crop_w) = (num_clips, num_crops, 3, 32, 224, 224).
+    Takes in a whole video and returns a tensor of shape (N, n_crops, C, T, H, W) = (N, n_crops, 3, 32, 224, 224) consisting the tensor of each clip in the video.
+
+    Expected data structure:
+    ------------------------
+
+    Input:
+    ```
+    {id_key: str, path_key: str}: Dict[str, str]
+    ```
+
+    Output:
+    ```
+    {
+        "inputs": torch.Tensor,  # (N, n_crops, C, T, H, W) = (N, n_crops, 3, 32, 224, 224)
+        "meta": {
+            "id": str,
+            "filename": str,
+        },
+    }: Dict[str, Union[torch.Tensor, Dict[str, str]]]
+    ```
     """
+
+    def crop_func(crop_type: Literal["10-crop", "5-crop", "center"], size: int):
+        if crop_type == "5-crop":
+            return my_transforms.FiveCrop(size=size)
+        elif crop_type == "10-crop":
+            return my_transforms.TenCrop(size=size)
+        elif crop_type == "center":
+            return my_transforms.CenterCrop(size=size)
+        else:
+            raise ValueError(f"Invalid crop_type: {crop_type}")
 
     preprocessing_cfg["io_backend"] = io_backend
     preprocessing_cfg["id_key"] = id_key
@@ -163,34 +260,29 @@ def build_end2end_pipeline(
     preprocessing_cfg["num_clips"] = num_clips
     preprocessing_cfg["crop_type"] = crop_type
 
-    crop_type_config = {
-        "5-crop": custom_transforms.FiveCrop,
-        "10-crop": custom_transforms.TenCrop,
-        "center": custom_transforms.CenterCrop,
-    }
-
     pipeline = [
-        custom_transforms.AdaptDataFormat(
+        my_transforms.AdaptDataFormat(
             id_key=preprocessing_cfg["id_key"],
             path_key=preprocessing_cfg["path_key"],
         ),
-        custom_transforms.VideoReaderInit(io_backend=preprocessing_cfg["io_backend"]),
-        custom_transforms.TemporalClipSample(
+        my_transforms.VideoReaderInit(io_backend=preprocessing_cfg["io_backend"]),
+        my_transforms.TemporalClipSample(
             clip_len=preprocessing_cfg["clip_len"],
             sampling_rate=preprocessing_cfg["sampling_rate"],
             num_clips=preprocessing_cfg["num_clips"],
         ),
-        custom_transforms.VideoDecode(),
-        custom_transforms.Resize(size=preprocessing_cfg["resize_size"]),
-        crop_type_config[preprocessing_cfg["crop_type"]](
-            size=preprocessing_cfg["crop_size"]
+        my_transforms.VideoDecode(),
+        my_transforms.Resize(size=preprocessing_cfg["resize_size"]),
+        crop_func(
+            crop_type=preprocessing_cfg["crop_type"],
+            size=preprocessing_cfg["crop_size"],
         ),
-        custom_transforms.ToDType(dtype=torch.float32, scale=True),
-        custom_transforms.Normalize(
+        my_transforms.ToDType(dtype=torch.float32, scale=True),
+        my_transforms.Normalize(
             mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]
         ),
-        custom_transforms.ConvertTCHWToCTHW(lead_dims=2),
-        custom_transforms.PackInputs(preserved_meta=["id", "filename"]),
+        my_transforms.ConvertTCHWToCTHW(lead_dims=2),
+        my_transforms.PackInputs(preserved_meta=["id", "filename"]),
     ]
 
     return tv_transforms.Compose(pipeline)

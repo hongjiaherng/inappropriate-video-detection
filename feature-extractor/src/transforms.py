@@ -339,6 +339,56 @@ class BatchDecodeIter(torch.nn.Module):
         return iter(self)
 
 
+class VideoDecode(torch.nn.Module):
+    """
+    Decodes video clips based on frame indices from a given VideoReader.
+
+    Required keys:
+    ```
+    * meta.video_reader: decord.VideoReader
+    * meta.frame_indices: range  # (num_clips * clip_len,)
+    * meta.num_clips: int
+    * meta.clip_len: int
+    ```
+
+    Resulting keys (unspecified keys are preserved):
+    ```
+    + inputs: torch.Tensor  # (num_clips, clip_len, C, H, W)
+    + meta.original_frame_shape: Tuple[int, int]
+    + meta.frame_shape: Tuple[int, int]
+    - meta.video_reader: decord.video_reader.VideoReader
+    - meta.frame_indices: np.ndarray  # (num_clips * clip_len,)
+    ```
+    """
+
+    def forward(self, result: Dict) -> Dict:
+        container = result["meta"]["video_reader"]
+        frame_indices = result["meta"]["frame_indices"]
+        num_clips = result["meta"]["num_clips"]
+        clip_len = result["meta"]["clip_len"]
+
+        # reset container to the beginning (https://github.com/dmlc/decord/issues/197)
+        container.seek(0)
+        clips = container.get_batch(frame_indices).asnumpy()  # (N*T, H, W, C)
+        clips = torch.tensor(clips, dtype=torch.uint8)
+        clips = torch.permute(clips, (0, 3, 1, 2))  # (N*T, C, H, W)
+        clips = torch.reshape(
+            clips, (num_clips, clip_len, *clips.shape[1:])
+        )  # (N, T, C, H, W)
+
+        result["inputs"] = clips
+        result["meta"]["original_frame_shape"] = tuple(clips.shape[-2:])
+        result["meta"]["frame_shape"] = tuple(clips.shape[-2:])
+
+        # free memory of video_reader, frame_indices
+        result["meta"].pop("video_reader")
+        result["meta"].pop("frame_indices")
+        del frame_indices, container
+        gc.collect()
+
+        return result
+
+
 class Resize(torch.nn.Module):
     """
     Resize the input video clips.

@@ -1,3 +1,6 @@
+# https://github.com/open-mmlab/mmaction2/blob/main/configs/recognition/swin/swin-tiny-p244-w877_in1k-pre_8xb8-amp-32x2x1-30e_kinetics400-rgb.py
+# https://github.com/open-mmlab/mmaction2/blob/main/configs/_base_/models/swin_tiny.py
+
 import os
 from typing import Literal
 

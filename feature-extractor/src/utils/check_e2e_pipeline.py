@@ -4,9 +4,6 @@ import importlib
 import datasets
 
 import torch
-import torchvision
-
-torchvision.disable_beta_transforms_warning()
 
 
 if __name__ == "__main__":

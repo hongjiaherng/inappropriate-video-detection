@@ -7,10 +7,7 @@ from typing import Dict, Literal, Sequence, Union, Iterator
 import numpy as np
 import decord
 import torch
-import torchvision
 import torchvision.transforms.v2.functional as F
-
-torchvision.disable_beta_transforms_warning()
 
 
 class AdaptDataFormat(torch.nn.Module):

@@ -10,15 +10,12 @@ from typing import Dict, Tuple, Union
 import numpy as np
 import torch
 import torch.nn as nn
-import torchvision
 import tqdm.auto as tqdm
 import dataset_utils
 from extract_features import extract_features
 
 
 ROOT_PATH = os.path.abspath(os.path.join(__file__, "../.."))
-
-torchvision.disable_beta_transforms_warning()
 
 # Set up logging configuration
 logging.basicConfig(level=logging.INFO)

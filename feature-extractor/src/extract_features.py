@@ -6,10 +6,7 @@ from typing import Dict, Union
 import numpy as np
 import torch
 import torch.nn as nn
-import torchvision
 import tqdm.auto as tqdm
-
-torchvision.disable_beta_transforms_warning()
 
 
 def forward_batch(

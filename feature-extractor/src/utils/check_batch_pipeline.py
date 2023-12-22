@@ -8,10 +8,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torchvision
-
-torchvision.disable_beta_transforms_warning()
-
 import torchvision.transforms.v2 as tv_transforms  # noqa: E402
 
 ROOT_PATH = os.path.abspath(os.path.join(__file__, "../../.."))

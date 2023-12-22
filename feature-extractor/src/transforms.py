@@ -1,8 +1,10 @@
 import io
 import gc
+import math
 import urllib
 from typing import Dict, Literal, Sequence, Union, Iterator
 
+import numpy as np
 import decord
 import torch
 import torchvision
@@ -141,7 +143,7 @@ class TemporalClipSample(torch.nn.Module):
 
     Resulting keys (unspecified keys are preserved):
     ```
-    + meta.frame_indices: range  # len of (num_clips * clip_len,)
+    + meta.frame_indices: np.ndarray  # (num_clips * clip_len,)
     + meta.num_clips: int
     + meta.clip_len: int
     + meta.sampling_rate: int
@@ -149,25 +151,76 @@ class TemporalClipSample(torch.nn.Module):
 
     """
 
-    def __init__(self, clip_len: int, sampling_rate: int, num_clips: int = -1):
+    def __init__(
+        self,
+        clip_len: int,
+        sampling_rate: int,
+        num_clips: int = -1,
+        drop_last: bool = False,
+        oob_option: Literal["loop", "repeat_last"] = "loop",
+    ):
         super().__init__()
         self.clip_len = clip_len
         self.num_clips = num_clips
         self.sampling_rate = sampling_rate
+        self.drop_last = drop_last
+        self.oob_option = oob_option
+        assert self.oob_option in {
+            "loop",
+            "repeat_last",
+        }, f"oob_option={self.oob_option} is not supported. Please use 'loop' or 'repeat_last' instead."
 
     def forward(self, result: Dict) -> Dict:
         total_frames = result["meta"]["total_frames"]
 
         if self.num_clips == -1:
-            max_num_clips = total_frames // (self.clip_len * self.sampling_rate)
+            if self.drop_last:
+                max_num_clips = total_frames // (self.clip_len * self.sampling_rate)
+                frame_indices = np.arange(
+                    0,
+                    self.clip_len * self.sampling_rate * max_num_clips,
+                    self.sampling_rate,
+                )
+
+            else:
+                max_num_clips = math.ceil(
+                    total_frames / (self.clip_len * self.sampling_rate)
+                )
+                frame_indices = np.arange(
+                    0,
+                    self.clip_len * self.sampling_rate * max_num_clips,
+                    self.sampling_rate,
+                )
+
+                if np.any(frame_indices >= total_frames):
+                    if self.oob_option == "loop":
+                        frame_indices = self._apply_loop_last_clip_op(
+                            frame_indices, total_frames
+                        )
+
+                    elif self.oob_option == "repeat_last":
+                        frame_indices = self._apply_repeat_last_op(
+                            frame_indices, total_frames
+                        )
+
         else:
-            max_num_clips = min(
-                self.num_clips, total_frames // (self.clip_len * self.sampling_rate)
+            max_num_clips = self.num_clips
+            frame_indices = np.arange(
+                0,
+                self.clip_len * self.sampling_rate * max_num_clips,
+                self.sampling_rate,
             )
 
-        frame_indices = range(
-            0, max_num_clips * self.clip_len * self.sampling_rate, self.sampling_rate
-        )  # (num_clips * clip_len,)
+            if np.any(frame_indices >= total_frames):
+                if self.oob_option == "loop":
+                    frame_indices = self._apply_loop_video_op(
+                        frame_indices, total_frames
+                    )
+
+                elif self.oob_option == "repeat_last":
+                    frame_indices = self._apply_repeat_last_op(
+                        frame_indices, total_frames
+                    )
 
         result["meta"]["frame_indices"] = frame_indices  # (num_clips, clip_len)
         result["meta"]["num_clips"] = max_num_clips
@@ -176,8 +229,34 @@ class TemporalClipSample(torch.nn.Module):
 
         return result
 
+    def _apply_loop_last_clip_op(self, frame_indices, total_frames):
+        last_clip_start_frame = (
+            (total_frames // (self.clip_len * self.sampling_rate))
+            * self.clip_len
+            * self.sampling_rate
+        )
+        last_clip_start_idx = np.argmax(frame_indices >= last_clip_start_frame)
+        valid_frames = np.arange(
+            last_clip_start_frame, total_frames, self.sampling_rate
+        )
+        last_clip_frames = np.tile(
+            valid_frames, math.ceil(self.clip_len / len(valid_frames))
+        )[: self.clip_len]
+        frame_indices[last_clip_start_idx:] = last_clip_frames
+
+        return frame_indices
+
+    def _apply_loop_video_op(self, frame_indices, total_frames):
+        frame_indices = np.mod(frame_indices, total_frames)
+        return frame_indices
+
+    def _apply_repeat_last_op(self, frame_indices, total_frames):
+        last_valid_frame = np.max(frame_indices[frame_indices < total_frames])
+        frame_indices[frame_indices >= total_frames] = last_valid_frame
+        return frame_indices
+
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(clip_len={self.clip_len}, num_clips={self.num_clips}, sampling_rate={self.sampling_rate})"
+        return f"{self.__class__.__name__}(clip_len={self.clip_len}, num_clips={self.num_clips}, sampling_rate={self.sampling_rate}, drop_last={self.drop_last}, oob_option={self.oob_option})"
 
 
 class ClipBatching(torch.nn.Module):
@@ -186,17 +265,17 @@ class ClipBatching(torch.nn.Module):
 
     Required keys:
     ```
-    * meta.frame_indices: range # (num_clips * clip_len,)
+    * meta.frame_indices: np.ndarray # (num_clips * clip_len,)
     ```
 
     Resulting keys (unspecified keys are preserved):
     ```
     + meta.batch_data: List[{
         "batch_id": int,
-        "frame_indices": range,  # len of (batch_size * clip_len,)
+        "frame_indices": np.ndarray,  # (batch_size * clip_len,)
         "num_clips": int,
     }] # len (num_batches, )
-    - meta.frame_indices: range  # len of (num_clips * clip_len,)
+    - meta.frame_indices: np.ndarray  # (num_clips * clip_len,)
     ```
 
     """
@@ -208,7 +287,7 @@ class ClipBatching(torch.nn.Module):
     def forward(self, result: Dict):
         frame_indices = result["meta"]["frame_indices"]
         clip_len = result["meta"]["clip_len"]
-        num_clips = len(frame_indices) // clip_len
+        num_clips = frame_indices.shape[0] // clip_len
 
         batch_data_list = []
 
@@ -220,7 +299,7 @@ class ClipBatching(torch.nn.Module):
                 * clip_len : (batch_start_idx + self.batch_size)
                 * clip_len
             ]  # (batch_size * clip_len, )
-            batch_num_clips = len(batch_frame_indices) // clip_len
+            batch_num_clips = batch_frame_indices.shape[0] // clip_len
 
             batch_data = {
                 "batch_id": batch_id,
@@ -250,7 +329,7 @@ class BatchDecodeIter(torch.nn.Module):
     ```
     * meta.batch_data: List[{
         "batch_id": int,
-        "frame_indices": range,  # (batch_size * clip_len,)
+        "frame_indices": np.ndarray,  # (batch_size * clip_len,)
         "num_clips": int,
     }] # len (num_batches, )
     * meta.video_reader: decord.VideoReader
@@ -267,7 +346,7 @@ class BatchDecodeIter(torch.nn.Module):
     +/~ meta.total_frames: int
     - meta.batch_data: List[{
         "batch_id": int,
-        "frame_indices": range,  # (batch_size * clip_len,)
+        "frame_indices": np.ndarray,  # (batch_size * clip_len,)
         "num_clips": int,
     }] # len (num_batches, )
     - meta.video_reader: decord.video_reader.VideoReader
@@ -349,7 +428,7 @@ class VideoDecode(torch.nn.Module):
     Required keys:
     ```
     * meta.video_reader: decord.VideoReader
-    * meta.frame_indices: range  # (num_clips * clip_len,)
+    * meta.frame_indices: np.ndarray  # (num_clips * clip_len,)
     * meta.num_clips: int
     * meta.clip_len: int
     ```

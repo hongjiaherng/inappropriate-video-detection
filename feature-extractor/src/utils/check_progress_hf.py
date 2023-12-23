@@ -10,6 +10,7 @@ i3d_rgb_list = [
 
 with open("results/progress.txt", "w", encoding="utf-8") as f:
     f.write("\n".join(i3d_rgb_list))
+    f.write("\n")
 
 i3d_rgb_list = fs.glob("datasets/jherng/xd-violence/data/video/**.mp4")
 i3d_rgb_list = [
@@ -20,3 +21,4 @@ i3d_rgb_list = [
 
 with open("results/videos.txt", "w", encoding="utf-8") as f:
     f.write("\n".join(i3d_rgb_list))
+    f.write("\n")

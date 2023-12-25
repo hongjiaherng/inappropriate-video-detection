@@ -1,0 +1,29 @@
+- model
+- loss
+- dataset
+- optimizer with LR scheduler
+- train
+- test
+- infer
+
+
+
+Dataset preprocessing
+
+train
+for each video:
+- all clip features of a video ->
+- if more than threshold (200), uniformly sample 200 clips features, otherwise, take all but zero pad to 200 ->
+- generate video-level label, 0 or 1
+
+test
+for each video:
+- take whole video don't care about number of clips
+- generate ground truth label
+
+
+- say options first
+
+- dataset whether streaming or not
+    - should always shuffle train Dataset, apply a preprocessing to input
+    - should not shuffle test Dataset and batch size of 5 to load all crops of a video at once, apply a preprocessing to target

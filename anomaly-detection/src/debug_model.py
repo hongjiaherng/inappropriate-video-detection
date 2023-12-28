@@ -22,3 +22,5 @@ def run(model, device):
         print(f"{k}: {v.shape}")
 
     outs = model(xs, seq_len)
+
+    print(model)

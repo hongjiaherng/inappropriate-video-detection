@@ -5,7 +5,7 @@ import torch
 import debug_model
 import configs
 import utils
-import pengwu_net
+import models.pengwu_net as pengwu_net
 
 
 def main(

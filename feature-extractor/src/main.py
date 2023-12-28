@@ -190,6 +190,27 @@ def init_model(
                 ),
                 "clip": swin.build_clip_pipeline(crop_type=crop_type),
             }
+    elif model_name == "c3d_sports1m-pretrained_8xb30-16x1x1-45e_ucf101-rgb":
+        c3d = importlib.import_module(
+            "models.c3d_sports1m-pretrained_8xb30-16x1x1-45e_ucf101-rgb"
+        )
+        model = c3d.build_model()
+
+        if batch_size == -1:
+            preprocessing = c3d.build_end2end_pipeline(
+                io_backend=io_backend,
+                num_clips=num_clips_per_video,
+                crop_type=crop_type,
+            )
+        else:
+            preprocessing = {
+                "video": c3d.build_video2clips_pipeline(
+                    batch_size=batch_size,
+                    io_backend=io_backend,
+                    num_clips=num_clips_per_video,
+                ),
+                "clip": c3d.build_clip_pipeline(crop_type=crop_type),
+            }
     else:
         raise ValueError(
             f"Model {model_name} not supported. Currently only supports ['i3d_imagenet-pretrained-r50-nl-dot-product_8xb8-32x2x1-100e_kinetics400-rgb', 'swin-tiny-p244-w877_in1k-pre_8xb8-amp-32x2x1-30e_kinetics400-rgb']."
@@ -228,10 +249,11 @@ if __name__ == "__main__":
         "--model",
         type=str,
         default="i3d_imagenet-pretrained-r50-nl-dot-product_8xb8-32x2x1-100e_kinetics400-rgb",
-        help='Model name to use for feature extraction. Currently only supports ["i3d_imagenet-pretrained-r50-nl-dot-product_8xb8-32x2x1-100e_kinetics400-rgb"].',
+        help='Model name to use for feature extraction. Currently only supports ["i3d_imagenet-pretrained-r50-nl-dot-product_8xb8-32x2x1-100e_kinetics400-rgb", "swin-tiny-p244-w877_in1k-pre_8xb8-amp-32x2x1-30e_kinetics400-rgb", "c3d_sports1m-pretrained_8xb30-16x1x1-45e_ucf101-rgb"].',
         choices=[
             "i3d_imagenet-pretrained-r50-nl-dot-product_8xb8-32x2x1-100e_kinetics400-rgb",
             "swin-tiny-p244-w877_in1k-pre_8xb8-amp-32x2x1-30e_kinetics400-rgb",
+            "c3d_sports1m-pretrained_8xb30-16x1x1-45e_ucf101-rgb",
         ],
     )
     parser.add_argument(

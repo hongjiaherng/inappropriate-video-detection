@@ -38,7 +38,7 @@ preprocessing_cfg = dict(
     crop_type=None,  # to be supplied by upstream
     batch_size=None,  # to be supplied by upstream
     clip_len=16,
-    sampling_rate=1,
+    sampling_rate=2,  # original sampling rate is 1 (change this to 2 for faster inference)
     resize_size=128,
     crop_size=112,
     mean=(104 / 255.0, 117 / 255.0, 128 / 255.0),
@@ -193,9 +193,7 @@ def build_clip_pipeline(
             size=preprocessing_cfg["crop_size"],
         ),
         my_transforms.ToDType(dtype=torch.float32, scale=True),
-        my_transforms.Normalize(
-            mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]
-        ),
+        my_transforms.Normalize(mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]),
         my_transforms.ConvertTCHWToCTHW(lead_dims=2),
         my_transforms.PackInputs(preserved_meta=[]),
     ]
@@ -269,9 +267,7 @@ def build_end2end_pipeline(
             size=preprocessing_cfg["crop_size"],
         ),
         my_transforms.ToDType(dtype=torch.float32, scale=True),
-        my_transforms.Normalize(
-            mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]
-        ),
+        my_transforms.Normalize(mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]),
         my_transforms.ConvertTCHWToCTHW(lead_dims=2),
         my_transforms.PackInputs(preserved_meta=[]),
     ]

@@ -1,0 +1,46 @@
+# Training Configs
+training_cfg:
+  max_epochs: "default_test"
+  batch_size: "default_test"
+  seed: "default_test"
+  pretrained_ckpt: "default_test"
+
+# Optimizer Configs
+optimizer_cfg:
+  lr: "default_test"
+  lr_scheduler:
+    milestones: "default_test"
+    gamma: "default_test"
+
+# Model Configs
+model_cfg:
+  model_name: "default_test"
+  dropout_prob: "default_test"
+  hlc_ctx_len: "default_test"
+  threshold: "default_test"
+  sigma: "default_test"
+  gamma: "default_test"
+  loss:
+    lambda: "default_test"
+    is_topk: "default_test"
+    q: "default_test"
+
+# Dataset Configs
+dataset_cfg:
+  feature_name: "default_test"
+  seperated_by_class: "default_test"
+  feature_dim: "default_test"
+  clip_len: "default_test"
+  sampling_rate: "default_test"
+  streaming: "default_test"
+  max_seq_len: "default_test"
+  num_workers: "default_test"
+
+# Logging Configs
+logging_cfg:
+  exp_name: "default_test"
+  log_every_n_steps: "default_test"
+  ckpt_every_n_epochs: "default_test"
+  test_every_n_epochs: "default_test"
+  log_dir: "default_test"
+  ckpt_dir: "default_test"

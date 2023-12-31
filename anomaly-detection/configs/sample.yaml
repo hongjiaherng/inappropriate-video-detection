@@ -1,0 +1,46 @@
+# Training Configs
+training_cfg:
+  max_epochs: 50
+  batch_size: 128
+  seed: 42
+  pretrained_ckpt: null
+
+# Optimizer Configs
+optimizer_cfg:
+  lr: 0.001
+  lr_scheduler:
+    milestones: [10, 30]
+    gamma: 0.1
+
+# Model Configs
+model_cfg:
+  model_name: "pengwu_net"
+  dropout_prob: 0.6
+  hlc_ctx_len: 5
+  threshold: 0.7
+  sigma: 1.0
+  gamma: 1.0
+  loss:
+    lambda: 5.0
+    is_topk: true
+    q: 16
+
+# Dataset Configs
+dataset_cfg:
+  feature_name: "i3d_rgb"
+  seperated_by_class: false
+  feature_dim: 2048
+  clip_len: 32
+  sampling_rate: 2
+  streaming: false
+  max_seq_len: 100
+  num_workers: 4
+
+# Logging Configs
+logging_cfg:
+  exp_name: null
+  log_every_n_steps: 10
+  ckpt_every_n_epochs: 10
+  test_every_n_epochs: 1
+  log_dir: "./logs/"
+  ckpt_dir: "./checkpoints/"

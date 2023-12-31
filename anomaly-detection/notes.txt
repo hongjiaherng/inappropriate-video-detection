@@ -27,3 +27,32 @@ for each video:
 - dataset whether streaming or not
     - should always shuffle train Dataset, apply a preprocessing to input
     - should not shuffle test Dataset and batch size of 5 to load all crops of a video at once, apply a preprocessing to target
+
+- What i wanna log?
+    - train:
+        - train loss (including 2 MILLoss & 1 DistillLoss) per step
+        - train loss (including 2 MILLoss & 1 DistillLoss) per epoch
+    - test:
+        - test loss (including 2 MILLoss & 1 DistillLoss) per epoch
+        - test metrics per epoch
+
+- How i wanna use it?
+
+- config?
+    - cli args config should not have default value, it must override the config file if specified
+
+
+# TODO: Add console logger
+# TODO: Add wandb logger for metrics, model checkpoints, configs
+# Use wandb to:
+# - Log metrics
+#   - Train loss (total, distill, mil_hl, mil_hlc) (every epoch or every n steps)
+#   - Test loss (total, distill, mil_hl, mil_hlc) (every epoch)
+#   - Test metrics (every epoch)
+#       - PRC-AUC (score vs epoch, accumulate)
+#       - ROC-AUC (score vs epoch, accumulate)
+#       - PRC (renew every epoch)
+#           - Plot in the same graph
+#       - ROC (renew every epoch)
+# - Save model checkpoints
+# - Save configs

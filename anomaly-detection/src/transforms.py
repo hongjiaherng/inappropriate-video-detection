@@ -30,15 +30,11 @@ class ExtractFrameGTs(torch.nn.Module):
         frame_gts = torch.zeros((num_frames,), dtype=torch.bool)
         crop_idx = int(x["id"].split("__")[-1])
 
-        if (
-            crop_idx != 0
-        ):  # Skip if not the first crop, processing the first crop is enough
+        if crop_idx != 0:  # Skip if not the first crop, processing the first crop is enough
             x["frame_gts"] = frame_gts
             return x
 
-        for start, end in zip(
-            x["frame_annotations"]["start"], x["frame_annotations"]["end"]
-        ):
+        for start, end in zip(x["frame_annotations"]["start"], x["frame_annotations"]["end"]):
             frame_gts[start:end] = 1
 
         x["frame_gts"] = frame_gts
@@ -84,13 +80,10 @@ class UniformSubsampleOrPad(torch.nn.Module):
         return x
 
     def _uniform_subsample(self, feat: torch.Tensor):
+        # TODO: Implement overlapping temporal subsample
         r = torch.linspace(0, len(feat) - 1, self.max_seq_len, dtype=torch.int32)
         return feat[r, :]
 
     def _pad(self, feat: torch.Tensor):
-        return torch.nn.functional.pad(
-            feat,
-            pad=(0, 0, 0, self.max_seq_len - len(feat)),
-            mode="constant",
-            value=0,
-        )  # pad last dim by (0, 0) and 2nd to last by (0, max_seq_len - len(feat))
+        # pad last dim by (0, 0) and 2nd to last by (0, max_seq_len - len(feat))
+        return torch.nn.functional.pad(feat, pad=(0, 0, 0, self.max_seq_len - len(feat)), mode="constant", value=0)

@@ -1,3 +1,4 @@
+# TODO: Log checkpoint, log ROC and PRC
 import math
 import logging
 import os
@@ -12,8 +13,8 @@ import utils
 import wandb
 from pengwu_net.losses import PengWuNetLoss
 from pengwu_net.model import PengWuNet
-from pengwu_net.test import test_one_epoch
-from pengwu_net.train import train_one_epoch
+from pengwu_net.test import test_one_epoch, debug_progress_bar as debug_test_one_epoch
+from pengwu_net.train import train_one_epoch, debug_progress_bar as debug_train_one_epoch
 
 
 def run(
@@ -86,7 +87,8 @@ def run(
         dir=log_dir,
     ):
         # Log configs, update configs with wandb run name and dir
-        logging_cfg.update({"exp_name": wandb.run.name, "log_dir": Path(wandb.run.dir).as_posix()})
+        exp_name, log_dir = wandb.run.name, Path(wandb.run.dir).as_posix()  # Update overrideable logging configs if it got changed
+        logging_cfg.update({"exp_name": exp_name, "log_dir": log_dir})
         wandb.config.update({"logging_cfg": logging_cfg}, allow_val_change=True)
         logger.info("Running with configs:")
         for k, v in wandb.config.items():
@@ -166,6 +168,18 @@ def run(
             scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
             start_epoch = checkpoint["epoch"]
 
+        logger.info("Initial evaluation before training...")
+        test_one_epoch(
+            model=model,
+            criterion=criterion,
+            test_loader=test_loader,
+            device=device,
+            test_steps_per_epoch=test_steps_per_epoch,
+            train_steps_per_epoch=train_steps_per_epoch,
+            current_epoch=-1,
+            clip_len=clip_len,
+            sampling_rate=sampling_rate,
+        )
         logger.info("Start training...")
         for epoch in range(start_epoch, max_epochs):
             tqdm.tqdm.write(f"Epoch {epoch+1}/{max_epochs}:")
@@ -186,7 +200,8 @@ def run(
                     criterion=criterion,
                     test_loader=test_loader,
                     device=device,
-                    steps_per_epoch=test_steps_per_epoch,
+                    test_steps_per_epoch=test_steps_per_epoch,
+                    train_steps_per_epoch=train_steps_per_epoch,
                     current_epoch=epoch,
                     clip_len=clip_len,
                     sampling_rate=sampling_rate,
@@ -196,8 +211,8 @@ def run(
 
             # Checkpoint every n epochs (if specified) or at the last epoch (mandatory)
             if (ckpt_every_n_epochs and (epoch + 1) % ckpt_every_n_epochs == 0) or epoch == max_epochs - 1:
-                full_ckpt_dir = os.path.join(ckpt_dir, wandb.config["logging_cfg"]["exp_name"])
-                ckpt_name = f"{exp_name}_{epoch+1}.pth" if epoch != max_epochs - 1 else f"{exp_name}_{epoch+1}_final.pth"
+                full_ckpt_dir = os.path.join(ckpt_dir, exp_name)
+                ckpt_name = f"{exp_name}_{epoch+1}e.pth"
                 os.makedirs(full_ckpt_dir, exist_ok=True)
                 torch.save(
                     {
@@ -208,4 +223,4 @@ def run(
                     },
                     os.path.join(full_ckpt_dir, ckpt_name),
                 )
-                wandb.save(os.path.join(full_ckpt_dir, ckpt_name))  # TODO: Not sure if this works
+            # wandb.save(os.path.join(full_ckpt_dir, ckpt_name))  # TODO: Not sure if this works

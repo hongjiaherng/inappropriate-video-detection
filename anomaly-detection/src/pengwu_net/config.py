@@ -1,6 +1,6 @@
 import argparse
-from utils import int_or_none, str_or_none, str2bool
 
+from utils import int_or_none, str2bool, str_or_none
 
 CONFIG_SHAPE = {
     "training_cfg": ["max_epochs", "batch_size", "seed", "pretrained_ckpt"],
@@ -14,10 +14,10 @@ CONFIG_SHAPE = {
 def add_model_args(parser: argparse.ArgumentParser) -> None:
     # Training configs
     training_group = parser.add_argument_group("Training configs")
-    training_group.add_argument("--max_epochs", type=int, help="maximum number of epochs to train")
-    training_group.add_argument("--batch_size", type=int, help="number of instances, i.e., number of videos in a batch of data")
-    training_group.add_argument("--seed", type=int_or_none, help="random seed (default: 42)")
-    training_group.add_argument("--pretrained_ckpt", type=str_or_none, help="path to pretrained checkpoint (default: None)")
+    training_group.add_argument("--max_epochs", type=int, help="Maximum number of epochs to train.")
+    training_group.add_argument("--batch_size", type=int, help="Number of instances, i.e., number of videos in a batch of data.")
+    training_group.add_argument("--seed", type=int_or_none, help="Random seed.")
+    training_group.add_argument("--pretrained_ckpt", type=str_or_none, help="Path to pretrained checkpoint.")
 
     # Optimizer configs
     optimizer_group = parser.add_argument_group("Optimizer configs")
@@ -38,16 +38,21 @@ def add_model_args(parser: argparse.ArgumentParser) -> None:
 
     # Dataset configs
     dataset_group = parser.add_argument_group("Dataset Configs")
-    dataset_group.add_argument("--feature_name", type=str, help="Feature name.")
+    dataset_group.add_argument("--feature_name", type=str, choices=["i3d_rgb", "swin_rgb", "c3d_rgb"], help="Feature name.")
     dataset_group.add_argument(
-        "--seperated_by_class", type=str2bool, nargs="?", const=True, help="Whether to create individual datasets for each class."
+        "--feature_dim",
+        type=int,
+        choices=[768, 2048, 4096],
+        help='Feature dimension, use 2048 for "i3d_rgb"; 768 for "swin_rgb"; 4096 for "c3d_rgb".',
     )
-    dataset_group.add_argument("--feature_dim", type=int, help="Feature dimension.")
-    dataset_group.add_argument("--clip_len", type=int, help="Clip length.")
-    dataset_group.add_argument("--sampling_rate", type=int, help="Sampling rate.")
+    dataset_group.add_argument("--clip_len", type=int, choices=[16, 32], help='Clip length, use 32 for "i3d_rgb" and "swin_rgb"; 16 for "c3d_rgb".')
+    dataset_group.add_argument("--sampling_rate", type=int, choices=[2], help='Sampling rate, use 2 for "i3d_rgb", "swin_rgb", and "c3d_rgb".')
     dataset_group.add_argument("--streaming", type=str2bool, nargs="?", const=True, help="Streaming mode flag.")
     dataset_group.add_argument("--max_seq_len", type=int, help="Maximum sequence length.")
     dataset_group.add_argument("--num_workers", type=int_or_none, help="Number of workers for data loading.")
+    # dataset_group.add_argument(
+    #     "--seperated_by_class", type=str2bool, nargs="?", const=True, help="Whether to create individual datasets for each class."
+    # ) # TODO: Might be useful for other model
 
     # Logging configs
     logging_group = parser.add_argument_group("Logging Configs")

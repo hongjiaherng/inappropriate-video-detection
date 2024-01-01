@@ -1,3 +1,5 @@
+# TODO: Debug why fpr and tpr using wandb.plot.roc_curve() are upside down
+
 import gc
 
 import wandb
@@ -39,7 +41,8 @@ def test_one_epoch(
     criterion: nn.Module,
     test_loader: torch.utils.data.DataLoader,
     device: torch.device,
-    steps_per_epoch: int,
+    test_steps_per_epoch: int,
+    train_steps_per_epoch: int,  # For logging
     current_epoch: int,
     clip_len: int,
     sampling_rate: int,
@@ -49,7 +52,7 @@ def test_one_epoch(
         pred_hlc_full, pred_hl_full, frame_gts_full = [], [], []
         loss_epoch, distill_epoch, mil_hl_epoch, mil_hlc_epoch = 0.0, 0.0, 0.0, 0.0
 
-        with tqdm.tqdm(total=steps_per_epoch, leave=True, desc="Testing") as pbar:
+        with tqdm.tqdm(total=test_steps_per_epoch, leave=True, desc="Testing") as pbar:
             for i, batch in enumerate(test_loader):
                 inputs = batch["feature"].to(device)  # (5, T, D) where 5 is the crop dim
                 labels = batch["binary_target"].repeat(5).to(device)  # (1,) -> (5,)
@@ -85,21 +88,21 @@ def test_one_epoch(
                 gc.collect()
 
             # Compute average loss for logging
-            loss_epoch /= steps_per_epoch
-            distill_epoch /= steps_per_epoch
-            mil_hl_epoch /= steps_per_epoch
-            mil_hlc_epoch /= steps_per_epoch
+            loss_epoch /= test_steps_per_epoch
+            distill_epoch /= test_steps_per_epoch
+            mil_hl_epoch /= test_steps_per_epoch
+            mil_hlc_epoch /= test_steps_per_epoch
 
             # Concatenate all batches, expand clip preds to frame preds
             pred_hlc_full = np.concatenate(pred_hlc_full).repeat(sampling_rate * clip_len)  # (N * T,) -> (N * T * clip_len * sampling_rate,)
             pred_hl_full = np.concatenate(pred_hl_full).repeat(sampling_rate * clip_len)
-            frame_gts_full = np.concatenate(frame_gts_full)  # (N * T * clip_len * sampling_rate,)
+            frame_gts_full = np.concatenate(frame_gts_full, dtype=np.int32)  # (N * T * clip_len * sampling_rate,)
 
             # Compute metrics and losses for an epoch
-            ap_hl, p_hl, r_hl = frame_level_prc_auc(frame_gts_full, pred_hl_full)
-            rocauc_hl, fpr_hl, tpr_hl = frame_level_roc_auc(frame_gts_full, pred_hl_full)
-            ap_hlc, p_hlc, r_hlc = frame_level_prc_auc(frame_gts_full, pred_hlc_full)
-            rocauc_hlc, fpr_hlc, tpr_hlc = frame_level_roc_auc(frame_gts_full, pred_hlc_full)
+            ap_hl, p_hl, r_hl = frame_level_prc_auc(frame_gts_full, pred_hl_full, num_thresholds=1000)
+            rocauc_hl, fpr_hl, tpr_hl = frame_level_roc_auc(frame_gts_full, pred_hl_full, num_thresholds=1000)
+            ap_hlc, p_hlc, r_hlc = frame_level_prc_auc(frame_gts_full, pred_hlc_full, num_thresholds=1000)
+            rocauc_hlc, fpr_hlc, tpr_hlc = frame_level_roc_auc(frame_gts_full, pred_hlc_full, num_thresholds=1000)
 
             # Log metrics and losses for an epoch
             pbar.set_postfix(
@@ -112,6 +115,26 @@ def test_one_epoch(
                 }
             )
 
+            # Plot ROC and PRC curves
+            pred_hl_cat = np.stack((pred_hl_full, 1 - pred_hl_full), axis=1)  # (N * T * clip_len * sampling_rate, 2)
+            pred_hlc_cat = np.stack((pred_hlc_full, 1 - pred_hlc_full), axis=1)  # (N * T * clip_len * sampling_rate, 2)
+            roc_hl_table = wandb.Table(
+                columns=["fpr", "tpr", "rocauc", "epoch"],
+                data=list([fpr, tpr, rocauc_hl, current_epoch + 1] for fpr, tpr in zip(fpr_hl, tpr_hl)),
+            )
+            roc_hlc_table = wandb.Table(
+                columns=["fpr", "tpr", "rocauc", "epoch"],
+                data=list([fpr, tpr, rocauc_hlc, current_epoch + 1] for fpr, tpr in zip(fpr_hlc, tpr_hlc)),
+            )
+            prc_hl_table = wandb.Table(
+                columns=["recall", "precision", "ap", "epoch"],
+                data=list([r, p, ap_hl, current_epoch + 1] for r, p in zip(r_hl, p_hl)),
+            )
+            prc_hlc_table = wandb.Table(
+                columns=["recall", "precision", "ap", "epoch"],
+                data=list([r, p, ap_hlc, current_epoch + 1] for r, p in zip(r_hlc, p_hlc)),
+            )
+
             wandb.log(
                 {
                     "test/ap_offline": ap_hl,
@@ -122,29 +145,35 @@ def test_one_epoch(
                     "test/distill_loss": distill_epoch,
                     "test/mil_loss_hl": mil_hl_epoch,
                     "test/mil_loss_hlc": mil_hlc_epoch,
-                    "epoch": current_epoch,
+                    "epoch": current_epoch + 1,  # at this epoch
+                    "steps_taken": (current_epoch + 1) * train_steps_per_epoch,  # total training steps taken up to this point
+                    "test/roc_per_class_offline": wandb.plot.roc_curve(
+                        y_true=frame_gts_full,
+                        y_probas=pred_hl_cat,
+                        labels=["normal", "anomaly"],
+                        title="ROC Per Class (Offline)",
+                    ),
+                    "test/roc_per_class_online": wandb.plot.roc_curve(
+                        y_true=frame_gts_full,
+                        y_probas=pred_hlc_cat,
+                        labels=["normal", "anomaly"],
+                        title="ROC Per Class (Online)",
+                    ),
+                    "test/prc_per_class_offline": wandb.plot.pr_curve(
+                        y_true=frame_gts_full,
+                        y_probas=pred_hl_cat,
+                        labels=["normal", "anomaly"],
+                        title="Average Precision Per Class (Offline)",
+                    ),
+                    "test/prc_per_class_online": wandb.plot.pr_curve(
+                        y_true=frame_gts_full,
+                        y_probas=pred_hlc_cat,
+                        labels=["normal", "anomaly"],
+                        title="Average Precision Per Class (Online)",
+                    ),
+                    "test/roc_offline": wandb.plot.line(table=roc_hl_table, x="fpr", y="tpr", title="ROC (Offline)"),
+                    "test/roc_online": wandb.plot.line(table=roc_hlc_table, x="fpr", y="tpr", title="ROC (Online)"),
+                    "test/prc_offline": wandb.plot.line(table=prc_hl_table, x="recall", y="precision", title="Average Precision (Offline)"),
+                    "test/prc_online": wandb.plot.line(table=prc_hlc_table, x="recall", y="precision", title="Average Precision (Online)"),
                 },
-            )  # TODO: Think about step variable in wandb logging
-
-            # TODO: Plot ROC and PRC curves
-            # Plot offline and online on the same ROC figure (slider to slide across epoch)
-            # Hover yields the AUC and fpr/tpr at the current epoch
-            # wandb.log(
-            #     {
-            #         "test/roc_offline": wandb.plots.ROC(
-            #             y_true=frame_gts_full,
-            #             y_probas=pred_hl_full,
-            #             classes=["normal", "abnormal"],
-            #             title="ROC Offline",
-            #         ),
-            #         "test/roc_online": wandb.plots.ROC(
-            #             y_true=frame_gts_full,
-            #             y_probas=pred_hlc_full,
-            #             classes=["normal", "abnormal"],
-            #             title="ROC Online",
-            #         ),
-            #     },
-            # )
-
-            # Plot offline and online on the same PRC figure (slider to slide across epoch)
-            # Hover yields the AUC and precision/recall at the current epoch
+            )

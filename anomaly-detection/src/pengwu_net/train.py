@@ -88,9 +88,8 @@ def train_one_epoch(
                         "train/distill_loss_step": distill,
                         "train/mil_loss_offline_step": mil_hl,
                         "train/mil_loss_online_step": mil_hlc,
-                        "custom_step": i + current_epoch * steps_per_epoch,  # TODO: For testing only
+                        "steps_taken": i + current_epoch * steps_per_epoch,
                     },
-                    step=i + current_epoch * steps_per_epoch,
                 )
 
             pbar.set_postfix({"loss": loss, "distill": distill, "mil_off": mil_hl, "mil_onl": mil_hlc})
@@ -112,9 +111,8 @@ def train_one_epoch(
                 "train/distill_loss": distill_epoch,
                 "train/mil_loss_offline": mil_hl_epoch,
                 "train/mil_loss_online": mil_hlc_epoch,
-                "epoch": current_epoch,
-                "custom_step": (current_epoch + 1) * steps_per_epoch,  # TODO: For testing only
+                "epoch": current_epoch + 1,  # at this epoch
+                "steps_taken": (current_epoch + 1) * steps_per_epoch,  # total steps taken up to this point
             },
-            step=(current_epoch + 1) * steps_per_epoch,
         )
         pbar.set_postfix({"loss": loss_epoch, "distill": distill_epoch, "mil_off": mil_hl_epoch, "mil_onl": mil_hlc_epoch})

@@ -1,5 +1,6 @@
 import argparse
-from typing import Dict
+from typing import Dict, List, Union
+from pprint import pprint
 
 import pengwu_net.config
 import svm_baseline.config
@@ -69,13 +70,35 @@ class ConfigParser:
     def _parse_as_yaml(self, config_path: str) -> Dict:
         try:
             with open(config_path, "r") as f:
-                config_dict = yaml.safe_load(f)
-                # TODO: Validate yaml config shape with self.config_shape
-            return config_dict
+                yaml_config = yaml.safe_load(f)
+                parsed_config = self._construct_config(yaml_config, self.config_shape)
+                return parsed_config
         except FileNotFoundError as e:
             raise FileNotFoundError(f"Config file not found: {config_path}") from e
         except yaml.YAMLError as e:
             raise ValueError(f"Error loading YAML file: {str(e)}") from e
+
+    def _construct_config(self, yaml_config: Dict, shape: Union[Dict, List, str]) -> Dict:
+        def _construct_config_recursively(yaml_config, shape):
+            if isinstance(shape, str):
+                return {shape: yaml_config[shape]}
+            elif isinstance(shape, list):
+                result = {}
+                for item in shape:
+                    result.update(_construct_config_recursively(yaml_config, item))
+                return result
+            elif isinstance(shape, dict):
+                return {key: _construct_config_recursively(yaml_config[key], value) for key, value in shape.items()}
+            else:
+                raise ValueError(f"Invalid subconfig type: {type(shape)}")
+
+        try:
+            return _construct_config_recursively(yaml_config, shape)
+        except KeyError as e:
+            raise KeyError(
+                f"""Required key {str(e)} not found in YAML config file. Please make sure the config file is 
+                matched with the required config shape as follows: {self.config_shape}"""
+            )
 
     def _merge_and_filter_none_values(self, yaml_config: Dict, cli_config: Dict) -> Dict:
         # Override yaml config with any cli args that are not None

@@ -1,6 +1,6 @@
 import argparse
-import random
 import distutils.util
+import random
 from typing import Optional
 
 import numpy as np

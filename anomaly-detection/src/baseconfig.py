@@ -1,6 +1,5 @@
 import argparse
 from typing import Dict, List, Union
-from pprint import pprint
 
 import pengwu_net.config
 import svm_baseline.config

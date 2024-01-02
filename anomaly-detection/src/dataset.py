@@ -113,7 +113,6 @@ def test_loader(
     config_name: Literal["i3d_rgb", "swin_rgb"],
     streaming: bool,
     num_workers: Optional[int] = None,
-    filter: Literal["anomaly", "normal", "all"] = "all",
 ):
     if streaming:
         test_ds = streaming_test_dataset(config_name)
@@ -150,12 +149,3 @@ def train_loader(
     else:
         train_ds = cached_train_dataset(config_name, max_seq_len, num_workers, filter=filter)
         return torch.utils.data.DataLoader(train_ds, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True)
-
-
-if __name__ == "__main__":
-    loader = train_loader("i3d_rgb", batch_size=128, max_seq_len=100, streaming=True, num_workers=0, filter="all")
-    loader = test_loader("i3d_rgb", streaming=True, num_workers=0)
-    # TODO: Inspect the cache_dir bug with custom dataset loading script
-    datasets.load_dataset("jherng/xd-violence", "i3d_rgb", split="test", streaming=False, cache_dir=None)
-    print(loader.dataset.n_shards)
-    # math.ceil(loader.dataset.n_shards * 5 / loader.batch_size)

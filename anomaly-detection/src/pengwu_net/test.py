@@ -1,13 +1,11 @@
-# TODO: Debug why fpr and tpr using wandb.plot.roc_curve() are upside down
-
 import gc
 
-import wandb
-import tqdm.auto as tqdm
 import numpy as np
 import torch
-import torch.utils.data
 import torch.nn as nn
+import torch.utils.data
+import tqdm.auto as tqdm
+import wandb
 from metrics import (
     frame_level_prc_auc,
     frame_level_roc_auc,
@@ -15,8 +13,8 @@ from metrics import (
 
 
 def debug_progress_bar(steps_per_epoch: int):
-    import time
     import random
+    import time
 
     with tqdm.tqdm(total=steps_per_epoch, leave=True, desc="Testing") as pbar:
         for i in range(steps_per_epoch):
@@ -46,11 +44,11 @@ def test_one_epoch(
     current_epoch: int,
     clip_len: int,
     sampling_rate: int,
-) -> None:
+):
     with torch.no_grad():
         model.eval()
         pred_hlc_full, pred_hl_full, frame_gts_full = [], [], []
-        loss_epoch, distill_epoch, mil_hl_epoch, mil_hlc_epoch = 0.0, 0.0, 0.0, 0.0
+        loss_epoch, distill_epoch, mil_hl_epoch, mil_hlc_epoch, ap_hl, rocauc_hl, ap_hlc, rocauc_hlc = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
         with tqdm.tqdm(total=test_steps_per_epoch, leave=True, desc="Testing") as pbar:
             for i, batch in enumerate(test_loader):
@@ -96,13 +94,13 @@ def test_one_epoch(
             # Concatenate all batches, expand clip preds to frame preds
             pred_hlc_full = np.concatenate(pred_hlc_full).repeat(sampling_rate * clip_len)  # (N * T,) -> (N * T * clip_len * sampling_rate,)
             pred_hl_full = np.concatenate(pred_hl_full).repeat(sampling_rate * clip_len)
-            frame_gts_full = np.concatenate(frame_gts_full, dtype=np.int32)  # (N * T * clip_len * sampling_rate,)
+            frame_gts_full = np.concatenate(frame_gts_full, dtype=np.int32)  # (N * T * clip_len * sampling_rate,), bool -> int32
 
             # Compute metrics and losses for an epoch
-            ap_hl, p_hl, r_hl = frame_level_prc_auc(frame_gts_full, pred_hl_full, num_thresholds=1000)
-            rocauc_hl, fpr_hl, tpr_hl = frame_level_roc_auc(frame_gts_full, pred_hl_full, num_thresholds=1000)
-            ap_hlc, p_hlc, r_hlc = frame_level_prc_auc(frame_gts_full, pred_hlc_full, num_thresholds=1000)
-            rocauc_hlc, fpr_hlc, tpr_hlc = frame_level_roc_auc(frame_gts_full, pred_hlc_full, num_thresholds=1000)
+            ap_hl, p_hl, r_hl = frame_level_prc_auc(frame_gts_full, pred_hl_full, num_thresholds=10000)
+            rocauc_hl, fpr_hl, tpr_hl = frame_level_roc_auc(frame_gts_full, pred_hl_full, num_thresholds=10000)
+            ap_hlc, p_hlc, r_hlc = frame_level_prc_auc(frame_gts_full, pred_hlc_full, num_thresholds=10000)
+            rocauc_hlc, fpr_hlc, tpr_hlc = frame_level_roc_auc(frame_gts_full, pred_hlc_full, num_thresholds=10000)
 
             # Log metrics and losses for an epoch
             pbar.set_postfix(
@@ -116,8 +114,8 @@ def test_one_epoch(
             )
 
             # Plot ROC and PRC curves
-            pred_hl_cat = np.stack((pred_hl_full, 1 - pred_hl_full), axis=1)  # (N * T * clip_len * sampling_rate, 2)
-            pred_hlc_cat = np.stack((pred_hlc_full, 1 - pred_hlc_full), axis=1)  # (N * T * clip_len * sampling_rate, 2)
+            pred_hl_cat = np.stack((1 - pred_hl_full, pred_hl_full), axis=1)  # (N * T * clip_len * sampling_rate, 2), p(normal), p(anomaly)
+            pred_hlc_cat = np.stack((1 - pred_hlc_full, pred_hlc_full), axis=1)  # (N * T * clip_len * sampling_rate, 2)
             roc_hl_table = wandb.Table(
                 columns=["fpr", "tpr", "rocauc", "epoch"],
                 data=list([fpr, tpr, rocauc_hl, current_epoch + 1] for fpr, tpr in zip(fpr_hl, tpr_hl)),
@@ -151,29 +149,37 @@ def test_one_epoch(
                         y_true=frame_gts_full,
                         y_probas=pred_hl_cat,
                         labels=["normal", "anomaly"],
-                        title="ROC Per Class (Offline)",
+                        title="ROC Curve Per Class (Offline)",
                     ),
                     "test/roc_per_class_online": wandb.plot.roc_curve(
                         y_true=frame_gts_full,
                         y_probas=pred_hlc_cat,
                         labels=["normal", "anomaly"],
-                        title="ROC Per Class (Online)",
+                        title="ROC Curve Per Class (Online)",
                     ),
                     "test/prc_per_class_offline": wandb.plot.pr_curve(
                         y_true=frame_gts_full,
                         y_probas=pred_hl_cat,
                         labels=["normal", "anomaly"],
-                        title="Average Precision Per Class (Offline)",
+                        title="Precision-Recall Curve Per Class (Offline)",
                     ),
                     "test/prc_per_class_online": wandb.plot.pr_curve(
                         y_true=frame_gts_full,
                         y_probas=pred_hlc_cat,
                         labels=["normal", "anomaly"],
-                        title="Average Precision Per Class (Online)",
+                        title="Precision-Recall Curve Per Class (Online)",
                     ),
-                    "test/roc_offline": wandb.plot.line(table=roc_hl_table, x="fpr", y="tpr", title="ROC (Offline)"),
-                    "test/roc_online": wandb.plot.line(table=roc_hlc_table, x="fpr", y="tpr", title="ROC (Online)"),
-                    "test/prc_offline": wandb.plot.line(table=prc_hl_table, x="recall", y="precision", title="Average Precision (Offline)"),
-                    "test/prc_online": wandb.plot.line(table=prc_hlc_table, x="recall", y="precision", title="Average Precision (Online)"),
+                    "test/roc_offline": wandb.plot.line(table=roc_hl_table, x="fpr", y="tpr", title="ROC Curve (Offline)"),
+                    "test/roc_online": wandb.plot.line(table=roc_hlc_table, x="fpr", y="tpr", title="ROC Curve (Online)"),
+                    "test/prc_offline": wandb.plot.line(table=prc_hl_table, x="recall", y="precision", title="Precision-Recall Curve (Offline)"),
+                    "test/prc_online": wandb.plot.line(table=prc_hlc_table, x="recall", y="precision", title="Precision-Recall Curve (Online)"),
                 },
             )
+
+        return {
+            "loss": loss_epoch,
+            "ap_offline": ap_hl,
+            "ap_online": ap_hlc,
+            "rocauc_offline": rocauc_hl,
+            "rocauc_online": rocauc_hlc,
+        }

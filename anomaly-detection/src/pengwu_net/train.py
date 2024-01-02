@@ -43,7 +43,7 @@ def train_one_epoch(
     device: torch.device,
     steps_per_epoch: int,
     current_epoch: int,
-    log_every_n_steps: int,
+    log_interval_steps: int,
 ) -> None:
     loss_epoch, distill_epoch, mil_hl_epoch, mil_hlc_epoch = 0.0, 0.0, 0.0, 0.0
 
@@ -81,14 +81,14 @@ def train_one_epoch(
             mil_hlc_epoch += mil_hlc
 
             # Step-level logging (log every n steps)
-            if (i + 1) % log_every_n_steps == 0:
+            if i == 0 or (i + 1) % log_interval_steps == 0:
                 wandb.log(
                     {
                         "train/loss_step": loss,
                         "train/distill_loss_step": distill,
                         "train/mil_loss_offline_step": mil_hl,
                         "train/mil_loss_online_step": mil_hlc,
-                        "steps_taken": i + current_epoch * steps_per_epoch,
+                        "steps_taken": i + 1 + current_epoch * steps_per_epoch,
                     },
                 )
 
@@ -116,3 +116,10 @@ def train_one_epoch(
             },
         )
         pbar.set_postfix({"loss": loss_epoch, "distill": distill_epoch, "mil_off": mil_hl_epoch, "mil_onl": mil_hlc_epoch})
+
+    return {
+        "loss": loss_epoch,
+        "distill": distill_epoch,
+        "mil_offline": mil_hl_epoch,
+        "mil_online": mil_hlc_epoch,
+    }

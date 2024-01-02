@@ -27,7 +27,7 @@ class PengWuNetLoss(nn.Module):
             distill_loss.detach(),  # Not backpropagatable (just for logging purposes)
             mil_loss_hl.detach(),  # Not backpropagatable
             mil_loss_hlc.detach(),  # Not backpropagatable
-        )  # TODO: Might cause memory issue
+        )  # Watch closely: Might cause memory issue
 
 
 class DistillLoss(nn.Module):
@@ -165,4 +165,3 @@ class MILLoss(nn.Module):
 
         loss = self.criterion(bag_logits, bag_labels)
         return loss
-

@@ -166,7 +166,7 @@ def run(
             shuffle=True,
             seed=seed,
         )
-        test_loader = dataset.test_loader(config_name=feature_name, streaming=streaming, filter="all", num_workers=num_workers)
+        test_loader = dataset.test_loader(config_name=feature_name, streaming=streaming, num_workers=num_workers)
         train_steps_per_epoch = (
             len(train_loader)
             if not isinstance(train_loader.dataset, torch.utils.data.IterableDataset)

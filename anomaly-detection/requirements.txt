@@ -1,6 +1,6 @@
-PyYAML
-deepmerge
-wandb
+PyYAML==6.0.1
+deepmerge==1.1.1
+wandb==0.16.1
 datasets==2.15.0
 
 --extra-index-url https://download.pytorch.org/whl/cu118

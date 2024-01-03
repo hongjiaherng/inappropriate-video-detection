@@ -39,37 +39,42 @@ def test_batch_collate(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {"feature": feature, "frame_gts": frame_gts, "binary_target": binary_target, **remaining}
 
 
-def streaming_test_dataset(config_name: Literal["i3d_rgb", "swin_rgb"]) -> datasets.IterableDataset:
-    assert config_name in ["i3d_rgb", "swin_rgb"], "Only i3d_rgb and swin_rgb are supported for now"
+def streaming_test_dataset(
+    config_name: Literal["i3d_rgb", "swin_rgb", "c3d_rgb"], clip_len: int = 32, sampling_rate: int = 2
+) -> datasets.IterableDataset:
+    assert config_name in ["i3d_rgb", "swin_rgb", "c3d_rgb"], "Only i3d_rgb, swin_rgb, and c3d_rgb are supported for now"
 
     return (
         datasets.load_dataset("jherng/xd-violence", config_name, split="test", streaming=True)
         .with_format("torch")
-        .map(ExtractFrameGTs(clip_len=32, sampling_rate=2))
+        .map(ExtractFrameGTs(clip_len=clip_len, sampling_rate=sampling_rate))
         .remove_columns(["id", "multilabel_target", "frame_annotations"])
     )
 
 
-def cached_test_dataset(config_name: Literal["i3d_rgb", "swin_rgb"], num_workers: Optional[int]) -> datasets.Dataset:
-    assert config_name in ["i3d_rgb", "swin_rgb"], "Only i3d_rgb and swin_rgb are supported for now"
+def cached_test_dataset(
+    config_name: Literal["i3d_rgb", "swin_rgb", "c3d_rgb"], num_workers: Optional[int], clip_len: int = 32, sampling_rate: int = 2
+) -> datasets.Dataset:
+    assert config_name in ["i3d_rgb", "swin_rgb", "c3d_rgb"], "Only i3d_rgb, swin_rgb, and c3d_rgb are supported for now"
     assert num_workers is None or num_workers > 0, "num_workers must be > 0 or None"
 
     return (
         datasets.load_dataset("jherng/xd-violence", config_name, split="test", streaming=False, num_proc=num_workers)
         .with_format("torch")
-        .map(ExtractFrameGTs(clip_len=32, sampling_rate=2), num_proc=num_workers)
+        .map(ExtractFrameGTs(clip_len=clip_len, sampling_rate=sampling_rate), num_proc=num_workers)
         .remove_columns(["id", "multilabel_target", "frame_annotations"])
     )
 
 
 def streaming_train_dataset(
-    config_name: Literal["i3d_rgb", "swin_rgb"],
+    config_name: Literal["i3d_rgb", "swin_rgb", "c3d_rgb"],
     max_seq_len: int,
     shuffle: bool,
     seed: Optional[int],
     filter: Literal["anomaly", "normal", "all"] = "all",
+    overlap_sampling: bool = False,
 ) -> datasets.IterableDataset:
-    assert config_name in ["i3d_rgb", "swin_rgb"], "Only i3d_rgb and swin_rgb are supported for now"
+    assert config_name in ["i3d_rgb", "swin_rgb", "c3d_rgb"], "Only i3d_rgb, swin_rgb, and c3d_rgb are supported for now"
     assert filter in ["anomaly", "normal", "all"], "filter must be one of anomaly, normal, all"
 
     ds = datasets.load_dataset("jherng/xd-violence", config_name, split="train", streaming=True).with_format("torch")
@@ -79,7 +84,9 @@ def streaming_train_dataset(
     elif filter == "normal":
         ds = ds.filter(lambda x: x["binary_target"] == 0)
 
-    ds = ds.map(UniformSubsampleOrPad(max_seq_len=max_seq_len)).remove_columns(["id", "multilabel_target", "frame_annotations"])
+    ds = ds.map(UniformSubsampleOrPad(max_seq_len=max_seq_len, overlap=overlap_sampling)).remove_columns(
+        ["id", "multilabel_target", "frame_annotations"]
+    )
 
     if not shuffle:
         return ds
@@ -88,12 +95,13 @@ def streaming_train_dataset(
 
 
 def cached_train_dataset(
-    config_name: Literal["i3d_rgb", "swin_rgb"],
+    config_name: Literal["i3d_rgb", "swin_rgb", "c3d_rgb"],
     max_seq_len: int,
     num_workers: Optional[int],
     filter: Literal["anomaly", "normal", "all"] = "all",
+    overlap_sampling: bool = False,
 ) -> datasets.Dataset:
-    assert config_name in ["i3d_rgb", "swin_rgb"], "Only i3d_rgb and swin_rgb are supported for now"
+    assert config_name in ["i3d_rgb", "swin_rgb", "c3d_rgb"], "Only i3d_rgb, swin_rgb, and c3d_rgb are supported for now"
     assert num_workers is None or num_workers > 0, "num_workers must be > 0 or None"
     assert filter in ["anomaly", "normal", "all"], "filter must be one of anomaly, normal, all"
 
@@ -104,20 +112,22 @@ def cached_train_dataset(
     elif filter == "normal":
         dataset = dataset.filter(lambda x: x["binary_target"] == 0, num_proc=num_workers)
 
-    return dataset.map(UniformSubsampleOrPad(max_seq_len=max_seq_len), num_proc=num_workers).remove_columns(
+    return dataset.map(UniformSubsampleOrPad(max_seq_len=max_seq_len, overlap=overlap_sampling), num_proc=num_workers).remove_columns(
         ["id", "multilabel_target", "frame_annotations"]
     )
 
 
 def test_loader(
-    config_name: Literal["i3d_rgb", "swin_rgb"],
+    config_name: Literal["i3d_rgb", "swin_rgb", "c3d_rgb"],
     streaming: bool,
     num_workers: Optional[int] = None,
+    clip_len: int = 32,
+    sampling_rate: int = 2,
 ):
     if streaming:
-        test_ds = streaming_test_dataset(config_name)
+        test_ds = streaming_test_dataset(config_name, clip_len, sampling_rate)
     else:
-        test_ds = cached_test_dataset(config_name, num_workers)
+        test_ds = cached_test_dataset(config_name, num_workers, clip_len, sampling_rate)
 
     test_loader = torch.utils.data.DataLoader(
         test_ds,
@@ -132,7 +142,7 @@ def test_loader(
 
 
 def train_loader(
-    config_name: Literal["i3d_rgb", "swin_rgb"],
+    config_name: Literal["i3d_rgb", "swin_rgb", "c3d_rgb"],
     batch_size: int,
     max_seq_len: int,
     streaming: bool,
@@ -140,12 +150,13 @@ def train_loader(
     filter: Literal["anomaly", "normal", "all"] = "all",
     shuffle: bool = True,
     seed: Optional[int] = None,
+    overlap_sampling: bool = False,
 ):
     # Shuffling is done in the dataloader for cached dataset, but not for streaming.
     # For streaming dataset, shuffling is done in the dataset itself by shuffling the shards on huffingface hub
     if streaming:
-        train_ds = streaming_train_dataset(config_name, max_seq_len, shuffle=shuffle, seed=seed, filter=filter)
+        train_ds = streaming_train_dataset(config_name, max_seq_len, shuffle=shuffle, seed=seed, filter=filter, overlap_sampling=overlap_sampling)
         return torch.utils.data.DataLoader(train_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
     else:
-        train_ds = cached_train_dataset(config_name, max_seq_len, num_workers, filter=filter)
+        train_ds = cached_train_dataset(config_name, max_seq_len, num_workers, filter=filter, overlap_sampling=overlap_sampling)
         return torch.utils.data.DataLoader(train_ds, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True)

@@ -10,16 +10,15 @@ import torch.utils.data
 import tqdm.auto as tqdm
 import utils
 import wandb
-from pengwu_net.losses import PengWuNetLoss
-from pengwu_net.model import PengWuNet
-from pengwu_net.test import test_one_epoch
-from pengwu_net.train import train_one_epoch
+from sultani_net.losses import MILRankingLoss
+from sultani_net.model import SultaniNet
+from sultani_net.test import test_one_epoch
+from sultani_net.train import train_one_epoch
 
 
 def save_checkpoint(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
-    scheduler: torch.optim.lr_scheduler.MultiStepLR,
     epoch: int,
     best_test_metric_val: float,
     ckpt_name: str,
@@ -33,7 +32,6 @@ def save_checkpoint(
             "best_test_metric_val": best_test_metric_val,
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
-            "scheduler_state_dict": scheduler.state_dict(),
         },
         ckpt_path,
     )
@@ -45,21 +43,19 @@ def save_checkpoint(
 def load_checkpoint(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
-    scheduler: torch.optim.lr_scheduler.MultiStepLR,
     ckpt_name: str,
     log_dir: str,
     run_path: str,
-) -> Tuple[torch.nn.Module, torch.optim.Optimizer, torch.optim.lr_scheduler.MultiStepLR, int, float]:
+) -> Tuple[torch.nn.Module, torch.optim.Optimizer, int, float]:
     ckpt_path = wandb.restore(ckpt_name, run_path=run_path, root=log_dir).name
     ckpt = torch.load(ckpt_path)
 
     model.load_state_dict(ckpt["model_state_dict"])
     optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-    scheduler.load_state_dict(ckpt["scheduler_state_dict"])
     epoch = ckpt["epoch"]
     best_test_metric_val = ckpt["best_test_metric_val"]
 
-    return model, optimizer, scheduler, epoch, best_test_metric_val
+    return model, optimizer, epoch, best_test_metric_val
 
 
 def run(
@@ -79,25 +75,17 @@ def run(
         training_cfg["resume_run_id"],  # nullable
         training_cfg["resume_ckpt_type"],  # nullable
     )  # training
-    lr, lr_hlc, lr_scheduler_milestones, lr_scheduler_gamma = (
+    lr, weight_decay = (
         optimizer_cfg["lr"],
-        optimizer_cfg["lr_hlc"],
-        optimizer_cfg["lr_scheduler"]["milestones"],
-        optimizer_cfg["lr_scheduler"]["gamma"],
+        optimizer_cfg["weight_decay"],
     )  # optimizer
-    dropout_prob, hlc_ctx_len, threshold, sigma, gamma, loss_lambda, loss_is_topk, loss_q = (
+    dropout_prob, lambda_smooth, lambda_sparsity = (
         model_cfg["dropout_prob"],
-        model_cfg["hlc_ctx_len"],
-        model_cfg["threshold"],
-        model_cfg["sigma"],
-        model_cfg["gamma"],
-        model_cfg["loss"]["lambda"],
-        model_cfg["loss"]["is_topk"],
-        model_cfg["loss"]["q"],
+        model_cfg["loss"]["lambda_smooth"],
+        model_cfg["loss"]["lambda_sparsity"],
     )  # model
-    feature_name, seperated_by_class, feature_dim, clip_len, sampling_rate, streaming, max_seq_len, num_workers = (
+    feature_name, feature_dim, clip_len, sampling_rate, streaming, max_seq_len, num_workers = (
         dataset_cfg["feature_name"],
-        dataset_cfg["seperated_by_class"],
         dataset_cfg["feature_dim"],
         dataset_cfg["clip_len"],
         dataset_cfg["sampling_rate"],
@@ -116,14 +104,7 @@ def run(
     project_name = kwargs.get("project_name", None)
 
     # Some sanity checks
-    assert seperated_by_class is False, "PengWuNet does not support constrastive learning."
-    assert test_metric in [
-        "ap_offline",
-        "ap_online",
-        "rocauc_offline",
-        "rocauc_online",
-        "loss",
-    ], "test_metric must be one of ['ap_offline', 'ap_online', 'rocauc_offline', 'rocauc_online', 'loss']"
+    assert test_metric in ["ap", "rocauc"], "test_metric must be one of ['ap', 'rocauc']."
     assert project_name is not None, "project_name must be specified."
     assert resume_ckpt_type in ["best", "last", None], "resume_ckpt_type must be one of ['best', 'last'] or None."
 
@@ -156,21 +137,38 @@ def run(
 
         # Dataloader
         logger.info("Initalizing dataloader...")
-        train_loader = dataset.train_loader(
+        normal_loader = dataset.train_loader(
             config_name=feature_name,
             batch_size=batch_size,
             max_seq_len=max_seq_len,
             streaming=streaming,
-            filter="all",
             num_workers=num_workers,
+            filter="normal",
+            shuffle=True,
+            seed=seed,
+        )
+        anomaly_loader = dataset.train_loader(
+            config_name=feature_name,
+            batch_size=batch_size,
+            max_seq_len=max_seq_len,
+            streaming=streaming,
+            num_workers=num_workers,
+            filter="anomaly",
             shuffle=True,
             seed=seed,
         )
         test_loader = dataset.test_loader(config_name=feature_name, streaming=streaming, num_workers=num_workers)
-        train_steps_per_epoch = (
-            len(train_loader)
-            if not isinstance(train_loader.dataset, torch.utils.data.IterableDataset)
-            else math.ceil(train_loader.dataset.n_shards * 5 / train_loader.batch_size)
+        train_steps_per_epoch = min(
+            (
+                len(normal_loader)
+                if not isinstance(normal_loader.dataset, torch.utils.data.IterableDataset)
+                else math.ceil(normal_loader.dataset.n_shards * 5 / normal_loader.batch_size)
+            ),
+            (
+                len(anomaly_loader)
+                if not isinstance(anomaly_loader.dataset, torch.utils.data.IterableDataset)
+                else math.ceil(anomaly_loader.dataset.n_shards * 5 / anomaly_loader.batch_size)
+            ),
         )
         test_steps_per_epoch = (
             len(test_loader)
@@ -181,36 +179,19 @@ def run(
         # Model, optimizer, scheduler, criterion
         logger.info("Initalizing model, optimizer, scheduler, criterion...")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = PengWuNet(
-            feature_dim=feature_dim,
-            dropout_prob=dropout_prob,
-            hlc_ctx_len=hlc_ctx_len,
-            threshold=threshold,
-            sigma=sigma,
-            gamma=gamma,
-        ).to(device)
+        model = SultaniNet(feature_dim=feature_dim, dropout_prob=dropout_prob).to(device)
         logger.info(f"Model preview: {model}")
-        optimizer = torch.optim.Adam(
-            [
-                {"params": model.hl_net.parameters()},
-                {"params": model.fuse.parameters()},
-                {"params": model.hlc_approx.parameters(), "lr": lr_hlc},
-            ],
-            lr=lr,
-            weight_decay=0.0,
-        )
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer=optimizer, gamma=lr_scheduler_gamma, milestones=lr_scheduler_milestones)
-        criterion = PengWuNetLoss(lambda_=loss_lambda, is_topk=loss_is_topk, q=loss_q)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+        criterion = MILRankingLoss(lambda_smooth=lambda_smooth, lambda_sparsity=lambda_sparsity, seq_len=max_seq_len)
 
         start_epoch = 0
-        best_test_metric_val = -float("inf") if test_metric != "loss" else float("inf")
+        best_test_metric_val = -float("inf")
         if wandb.run.resumed:
             resume_ckpt_type = resume_ckpt_type if resume_ckpt_type else "last"  # default to last
             logger.info(f"Resuming from last checkpoint of {wandb.run.path} at {log_dir} ...")
             model, optimizer, scheduler, start_epoch, best_test_metric_val = load_checkpoint(
                 model=model,
                 optimizer=optimizer,
-                scheduler=scheduler,
                 ckpt_name=f"{exp_name}_{resume_ckpt_type}.pth",
                 log_dir=log_dir,
                 run_path=wandb.run.path,
@@ -219,7 +200,6 @@ def run(
             logger.info("Initial evaluation before training...")
             best_test_metric_val = test_one_epoch(
                 model=model,
-                criterion=criterion,
                 test_loader=test_loader,
                 device=device,
                 test_steps_per_epoch=test_steps_per_epoch,
@@ -235,7 +215,8 @@ def run(
             train_one_epoch(
                 model=model,
                 criterion=criterion,
-                train_loader=train_loader,
+                normal_loader=normal_loader,
+                anomaly_loader=anomaly_loader,
                 optimizer=optimizer,
                 device=device,
                 steps_per_epoch=train_steps_per_epoch,
@@ -246,7 +227,6 @@ def run(
             if (epoch + 1) % test_interval_epochs == 0 or epoch == max_epochs - 1 or epoch == 0:
                 cur_test_metric_val = test_one_epoch(
                     model=model,
-                    criterion=criterion,
                     test_loader=test_loader,
                     device=device,
                     test_steps_per_epoch=test_steps_per_epoch,
@@ -257,14 +237,11 @@ def run(
                 )[test_metric]
 
                 # Save the mode checkpoint if it's the best so far
-                if (test_metric == "loss" and cur_test_metric_val <= best_test_metric_val) or (
-                    test_metric != "loss" and cur_test_metric_val >= best_test_metric_val
-                ):
+                if cur_test_metric_val >= best_test_metric_val:
                     best_test_metric_val = cur_test_metric_val
                     ckpt_path = save_checkpoint(
                         model=model,
                         optimizer=optimizer,
-                        scheduler=scheduler,
                         epoch=epoch + 1,
                         best_test_metric_val=best_test_metric_val,
                         ckpt_name=f"{exp_name}_best.pth",
@@ -272,14 +249,11 @@ def run(
                     )
                     logger.info(f"Best checkpoint saved to {ckpt_path}.")
 
-            scheduler.step()
-
             # Checkpoint every n epochs (if specified) or at the last epoch (mandatory)
             if (ckpt_interval_epochs and (epoch + 1) % ckpt_interval_epochs == 0) or epoch == max_epochs - 1 or epoch == 0:
                 ckpt_path = save_checkpoint(
                     model=model,
                     optimizer=optimizer,
-                    scheduler=scheduler,
                     epoch=epoch + 1,
                     best_test_metric_val=best_test_metric_val,
                     ckpt_name=f"{exp_name}_last.pth",

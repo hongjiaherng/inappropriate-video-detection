@@ -4,6 +4,7 @@ training_cfg:
   batch_size: 128
   seed: 2333 # https://github.com/Roc-Ng/XDVioDet/blob/master/main.py#L24
   resume_run_id: null
+  resume_ckpt_type: null
 
 # Optimizer Configs
 optimizer_cfg:

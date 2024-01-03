@@ -44,7 +44,7 @@ class ExtractFrameGTs(torch.nn.Module):
 
 class UniformSubsampleOrPad(torch.nn.Module):
     """
-    Uniformly subsample or pad a feature tensor to a fixed length.
+    Subsample or pad a feature tensor to a fixed length uniformly (Optionally with overlap).
     (T, D) -> (max_seq_len, D)
 
     Required keys:
@@ -59,9 +59,10 @@ class UniformSubsampleOrPad(torch.nn.Module):
 
     """
 
-    def __init__(self, max_seq_len: int = 200):
+    def __init__(self, max_seq_len: int = 200, overlap: bool = False):
         super().__init__()
         self.max_seq_len = max_seq_len
+        self.overlap = overlap
 
     def forward(self, x: Dict[str, Any]) -> Dict[str, Any]:
         feature = x["feature"]
@@ -71,7 +72,7 @@ class UniformSubsampleOrPad(torch.nn.Module):
 
         # Pad if shorter than max_seq_len otherwise extract uniformly
         if len(feature) > self.max_seq_len:
-            feature = self._uniform_subsample(feature)
+            feature = self._uniform_subsample(feature) if not self.overlap else self._overlap_subsample(feature)
         else:
             feature = self._pad(feature)
 
@@ -80,9 +81,18 @@ class UniformSubsampleOrPad(torch.nn.Module):
         return x
 
     def _uniform_subsample(self, feat: torch.Tensor):
-        # TODO: Implement overlapping temporal subsample
         r = torch.linspace(0, len(feat) - 1, self.max_seq_len, dtype=torch.int32)
         return feat[r, :]
+
+    def _overlap_subsample(self, feat: torch.Tensor):
+        new_feat = torch.zeros((self.max_seq_len, feat.shape[1]), dtype=feat.dtype)
+        r = torch.linspace(0, len(feat), self.max_seq_len + 1, dtype=torch.int32)
+        for i in range(self.max_seq_len):
+            if r[i] != r[i + 1]:
+                new_feat[i, :] = torch.mean(feat[r[i] : r[i + 1], :], dim=0)
+            else:
+                new_feat[i, :] = feat[r[i], :]
+        return new_feat
 
     def _pad(self, feat: torch.Tensor):
         # pad last dim by (0, 0) and 2nd to last by (0, max_seq_len - len(feat))

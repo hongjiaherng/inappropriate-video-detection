@@ -2,12 +2,14 @@ import argparse
 from typing import Dict, List, Union
 
 import pengwu_net.config
+import sultani_net.config
 import svm_baseline.config
 import yaml
 from deepmerge import always_merger
 
 MODEL_ARGS = {
     "pengwu_net": pengwu_net.config.add_model_args,
+    "sultani_net": sultani_net.config.add_model_args,
     "svm_baseline": svm_baseline.config.add_model_args,
 }
 
@@ -26,6 +28,8 @@ def get_parser_args():
 
     if args.model_name == "pengwu_net":
         config_shape = pengwu_net.config.CONFIG_SHAPE
+    elif args.model_name == "sultani_net":
+        config_shape = sultani_net.config.CONFIG_SHAPE
     elif args.model_name == "svm_baseline":
         config_shape = svm_baseline.config.CONFIG_SHAPE
     else:

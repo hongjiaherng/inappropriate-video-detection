@@ -6,8 +6,8 @@ import dataset
 import torch
 import torch.utils.data
 import wandb
-from pengwu_net.model import PengWuNet
-from pengwu_net.test import test_no_log
+from sultani_net.model import SultaniNet
+from sultani_net.test import test_no_log
 
 
 def run(run_path: str, ckpt_type: str, logger: logging.Logger, **kwargs):
@@ -42,13 +42,10 @@ def inference(
         dataset_cfg["streaming"],
         dataset_cfg["num_workers"],  # nullable
     )  # dataset
-
-    dropout_prob, hlc_ctx_len, threshold, sigma, gamma = (
+    dropout_prob, lambda_smooth, lambda_sparsity = (
         model_cfg["dropout_prob"],
-        model_cfg["hlc_ctx_len"],
-        model_cfg["threshold"],
-        model_cfg["sigma"],
-        model_cfg["gamma"],
+        model_cfg["loss"]["lambda_smooth"],
+        model_cfg["loss"]["lambda_sparsity"],
     )  # model
 
     logger.info("Initalizing test dataloader...")
@@ -62,14 +59,7 @@ def inference(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     logger.info("Initalizing model ...")
-    model = PengWuNet(
-        feature_dim=feature_dim,
-        dropout_prob=dropout_prob,
-        hlc_ctx_len=hlc_ctx_len,
-        threshold=threshold,
-        sigma=sigma,
-        gamma=gamma,
-    ).to(device)
+    model = SultaniNet(feature_dim=feature_dim, dropout_prob=dropout_prob).to(device)
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt["model_state_dict"])
     logger.info(f"Model preview: {model}")
@@ -82,14 +72,7 @@ def inference(
         clip_len=clip_len,
         sampling_rate=sampling_rate,
     )
-    ap_offline, ap_online, rocauc_offline, rocauc_online = (
-        result["ap_offline"],
-        result["ap_online"],
-        result["rocauc_offline"],
-        result["rocauc_online"],
-    )
+    ap, rocauc = result["ap"], result["rocauc"]
 
-    logger.info(f"AP (offline): {ap_offline:.4f}")
-    logger.info(f"AP (online): {ap_online:.4f}")
-    logger.info(f"ROC-AUC (offline): {rocauc_offline:.4f}")
-    logger.info(f"ROC-AUC (online): {rocauc_online:.4f}")
+    logger.info(f"AP: {ap:.4f}")
+    logger.info(f"ROC-AUC: {rocauc:.4f}")

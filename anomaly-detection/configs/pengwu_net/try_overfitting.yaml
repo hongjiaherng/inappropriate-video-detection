@@ -1,6 +1,6 @@
 # Training Configs
 training_cfg:
-  max_epochs: 50
+  max_epochs: 100
   batch_size: 128
   seed: 2333 # https://github.com/Roc-Ng/XDVioDet/blob/master/main.py#L24
   resume_run_id: null
@@ -10,14 +10,14 @@ training_cfg:
 optimizer_cfg:
   lr: 0.001
   lr_hlc: 0.0005
-  lr_scheduler:
-    milestones: [10, 30]
-    gamma: 0.1
+  lr_scheduler: # disable lr scheduler
+    milestones: null
+    gamma: 1
 
 # Model Configs
 model_cfg:
   model_name: "pengwu_net"
-  dropout_prob: 0.7
+  dropout_prob: 0.6 # https://github.com/Roc-Ng/XDVioDet/blob/master/model.py#L40
   hlc_ctx_len: 5
   threshold: 0.7
   sigma: 1.0
@@ -35,19 +35,14 @@ dataset_cfg:
   clip_len: 32
   sampling_rate: 2
   streaming: false
-  max_seq_len: 200
+  max_seq_len: 200 # can account for larger sequences because we our feature extractor has a sampling rate of 2 and clip length of 32 (i.e. 64 frames just for a single clip, whereas the original paper used clip length of 16 and sampling rate of 1, i.e. 16 frames for a single clip)
   num_workers: 4
 
 # Logging Configs
 logging_cfg:
-  exp_name: pengwunet-default
+  exp_name: try-to-overfit-pengwunet
   log_interval_steps: 10
-  ckpt_interval_epochs: 10
+  ckpt_interval_epochs: 2
   test_interval_epochs: 2
   log_dir: "./logs/"
   test_metric: "ap_offline"
-
-# TODO:
-# - maybe not overfit, tune down dropout_prob
-# - about batch size, maybe 128 is too small, try 156
-# - should change ckpt_interval_epochs to 2, as it's not expensive to save a checkpoint

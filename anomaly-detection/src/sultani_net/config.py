@@ -2,11 +2,12 @@ import argparse
 
 from utils import int_or_none, str2bool, str_or_none
 
+
 CONFIG_SHAPE = {
     "training_cfg": ["max_epochs", "batch_size", "seed", "resume_run_id", "resume_ckpt_type"],
-    "optimizer_cfg": ["lr", "lr_hlc", {"lr_scheduler": ["milestones", "gamma"]}],
-    "model_cfg": ["model_name", "dropout_prob", "hlc_ctx_len", "threshold", "sigma", "gamma", {"loss": ["lambda", "is_topk", "q"]}],
-    "dataset_cfg": ["feature_name", "seperated_by_class", "feature_dim", "clip_len", "sampling_rate", "streaming", "max_seq_len", "num_workers"],
+    "optimizer_cfg": ["lr", "weight_decay"],
+    "model_cfg": ["model_name", "dropout_prob", {"loss": ["lambda_smooth", "lambda_sparsity"]}],
+    "dataset_cfg": ["feature_name", "feature_dim", "clip_len", "sampling_rate", "streaming", "max_seq_len", "num_workers"],
     "logging_cfg": ["exp_name", "log_interval_steps", "ckpt_interval_epochs", "test_interval_epochs", "log_dir", "test_metric"],
 }
 
@@ -23,20 +24,13 @@ def add_model_args(parser: argparse.ArgumentParser) -> None:
     # Optimizer configs
     optimizer_group = parser.add_argument_group("Optimizer configs")
     optimizer_group.add_argument("--lr", type=float, help="Learning rate for the rest of the model.")
-    optimizer_group.add_argument("--lr_hlc", type=float, help="Learning rate for HLC approximator.")
-    optimizer_group.add_argument("--lr_scheduler.milestones", type=int, nargs="+", help="LR scheduler milestones.")
-    optimizer_group.add_argument("--lr_scheduler.gamma", type=float, help="LR scheduler gamma.")
+    optimizer_group.add_argument("--weight_decay", type=float, help="Weight decay.")
 
     # Model configs
     model_group = parser.add_argument_group("Model Configs")
     model_group.add_argument("--dropout_prob", type=float, help="Dropout probability.")
-    model_group.add_argument("--hlc_ctx_len", type=int, help="HLC context length.")
-    model_group.add_argument("--threshold", type=float, help="Threshold value.")
-    model_group.add_argument("--sigma", type=float, help="Sigma value.")
-    model_group.add_argument("--gamma", type=float, help="Gamma value.")
-    model_group.add_argument("--loss.lambda", type=float, help="Lambda value.")
-    model_group.add_argument("--loss.is_topk", type=str2bool, nargs="?", const=True, help="Flag for using top-k pooling.")
-    model_group.add_argument("--loss.q", type=int, help="Q value.")
+    model_group.add_argument("--loss.lambda_smooth", type=float, help="Lambda value for smoothness loss.")
+    model_group.add_argument("--loss.lambda_sparsity", type=float, help="Lambda value for sparsity loss.")
 
     # Dataset configs
     dataset_group = parser.add_argument_group("Dataset Configs")
@@ -52,9 +46,6 @@ def add_model_args(parser: argparse.ArgumentParser) -> None:
     dataset_group.add_argument("--streaming", type=str2bool, nargs="?", const=True, help="Streaming mode flag.")
     dataset_group.add_argument("--max_seq_len", type=int, help="Maximum sequence length.")
     dataset_group.add_argument("--num_workers", type=int_or_none, help="Number of workers for data loading.")
-    dataset_group.add_argument(
-        "--seperated_by_class", type=str2bool, nargs="?", const=True, help="Whether to create separated training datasets for each class."
-    )
 
     # Logging configs
     logging_group = parser.add_argument_group("Logging Configs")

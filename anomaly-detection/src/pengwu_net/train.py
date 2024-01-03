@@ -1,3 +1,4 @@
+from typing import Dict
 import gc
 
 import torch
@@ -44,7 +45,7 @@ def train_one_epoch(
     steps_per_epoch: int,
     current_epoch: int,
     log_interval_steps: int,
-) -> None:
+) -> Dict[str, float]:
     loss_epoch, distill_epoch, mil_hl_epoch, mil_hlc_epoch = 0.0, 0.0, 0.0, 0.0
 
     model.train()

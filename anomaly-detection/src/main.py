@@ -2,6 +2,7 @@ import logging
 
 import baseconfig
 import pengwu_net.runner
+import sultani_net.runner
 
 PROJECT_NAME = "wsvad"
 
@@ -18,6 +19,8 @@ if __name__ == "__main__":
 
     if model_name == "pengwu_net":
         pengwu_net.runner.run(**config, logger=logger, project_name=PROJECT_NAME)
+    elif model_name == "sultani_net":
+        sultani_net.runner.run(**config, logger=logger, project_name=PROJECT_NAME)
     elif model_name == "svm_baseline":
         pass
     else:

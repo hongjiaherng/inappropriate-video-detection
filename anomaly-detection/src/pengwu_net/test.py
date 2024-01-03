@@ -34,6 +34,69 @@ def debug_progress_bar(steps_per_epoch: int):
         )
 
 
+def test_no_log(
+    model: nn.Module,
+    test_loader: torch.utils.data.DataLoader,
+    device: torch.device,
+    test_steps_per_epoch: int,
+    clip_len: int,
+    sampling_rate: int,
+):
+    with torch.no_grad():
+        model.eval()
+        pred_hlc_full, pred_hl_full, frame_gts_full = [], [], []
+        ap_hl, rocauc_hl, ap_hlc, rocauc_hlc = 0.0, 0.0, 0.0, 0.0
+
+        with tqdm.tqdm(total=test_steps_per_epoch, leave=True, desc="Testing") as pbar:
+            for i, batch in enumerate(test_loader):
+                inputs = batch["feature"].to(device)  # (5, T, D) where 5 is the crop dim
+                labels = batch["binary_target"].repeat(5).to(device)  # (1,) -> (5,)
+                frame_gts = batch["frame_gts"].numpy()  # (T * clip_len * sampling_rate,)
+
+                logits_hl, logits_hlc = model(inputs, seq_len=None)  # (5, T, 1)
+                pred_hlc = torch.mean(torch.sigmoid(torch.squeeze(logits_hlc)), dim=0).detach().cpu().numpy()  # Online detection (T,)
+                pred_hl = torch.mean(torch.sigmoid(torch.squeeze(logits_hl)), dim=0).detach().cpu().numpy()  # Offline detection (T,)
+
+                pred_hlc_full.append(pred_hlc)
+                pred_hl_full.append(pred_hl)
+                frame_gts_full.append(frame_gts)
+
+                # Progress bar
+                pbar.update(1)
+
+                # Memory cleanup
+                del inputs, labels, frame_gts, logits_hl, logits_hlc
+                gc.collect()
+
+            # Concatenate all batches, expand clip preds to frame preds
+            pred_hlc_full = np.concatenate(pred_hlc_full).repeat(sampling_rate * clip_len)  # (N * T,) -> (N * T * clip_len * sampling_rate,)
+            pred_hl_full = np.concatenate(pred_hl_full).repeat(sampling_rate * clip_len)
+            frame_gts_full = np.concatenate(frame_gts_full, dtype=np.int32)  # (N * T * clip_len * sampling_rate,), bool -> int32
+
+            # Compute metrics and losses for an epoch
+            ap_hl, _, _ = frame_level_prc_auc(frame_gts_full, pred_hl_full, num_thresholds=10000)
+            rocauc_hl, _, _ = frame_level_roc_auc(frame_gts_full, pred_hl_full, num_thresholds=10000)
+            ap_hlc, _, _ = frame_level_prc_auc(frame_gts_full, pred_hlc_full, num_thresholds=10000)
+            rocauc_hlc, _, _ = frame_level_roc_auc(frame_gts_full, pred_hlc_full, num_thresholds=10000)
+
+            # Log metrics and losses for an epoch
+            pbar.set_postfix(
+                {
+                    "ap_off": ap_hl,
+                    "ap_onl": ap_hlc,
+                    "rocauc_off": rocauc_hl,
+                    "rocauc_onl": rocauc_hlc,
+                }
+            )
+
+        return {
+            "ap_offline": ap_hl,
+            "ap_online": ap_hlc,
+            "rocauc_offline": rocauc_hl,
+            "rocauc_online": rocauc_hlc,
+        }
+
+
 def test_one_epoch(
     model: nn.Module,
     criterion: nn.Module,

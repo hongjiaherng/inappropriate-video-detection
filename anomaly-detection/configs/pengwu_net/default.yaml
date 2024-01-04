@@ -50,4 +50,8 @@ logging_cfg:
 # Notes:
 # - maybe not overfit, tune down dropout_prob
 # - should change ckpt_interval_epochs to 2, as it's not expensive to save a checkpoint
-# After 46 epochs:
+# After 46 epochs: (best)
+# INFO:infer:AP (offline): 0.7287
+# INFO:infer:AP (online): 0.6899
+# INFO:infer:ROC-AUC (offline): 0.9206
+# INFO:infer:ROC-AUC (online): 0.9026

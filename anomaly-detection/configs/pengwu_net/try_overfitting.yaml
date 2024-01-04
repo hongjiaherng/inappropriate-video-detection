@@ -49,7 +49,7 @@ logging_cfg:
 
 # Notes:
 # - exploding gradient happens at epoch 47, should use lr scheduler to tune down lr periodically
-# After 46 epochs:
+# After 46 epochs: (best)
 # INFO:infer:AP (offline): 0.7661
 # INFO:infer:AP (online): 0.7307
 # INFO:infer:ROC-AUC (offline): 0.9227

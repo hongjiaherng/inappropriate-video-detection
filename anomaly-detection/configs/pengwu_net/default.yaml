@@ -47,7 +47,7 @@ logging_cfg:
   log_dir: "./logs/"
   test_metric: "ap_offline"
 
-# TODO:
+# Notes:
 # - maybe not overfit, tune down dropout_prob
-# - about batch size, maybe 128 is too small, try 156
 # - should change ckpt_interval_epochs to 2, as it's not expensive to save a checkpoint
+# After 46 epochs:

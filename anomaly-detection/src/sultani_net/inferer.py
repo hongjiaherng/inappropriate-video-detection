@@ -62,6 +62,8 @@ def inference(
     model = SultaniNet(feature_dim=feature_dim, dropout_prob=dropout_prob).to(device)
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt["model_state_dict"])
+    epoch = ckpt["epoch"]
+    logger.info(f"Loaded checkpoint from {ckpt_path} @ epoch {epoch}")
     logger.info(f"Model preview: {model}")
 
     result = test_no_log(

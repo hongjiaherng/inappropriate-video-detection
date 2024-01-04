@@ -147,7 +147,7 @@ class ScoreBranch(nn.Module):
     def _compute_adj_mat(self, logits_hlc: torch.Tensor, seq_len: Optional[torch.Tensor] = None) -> torch.Tensor:
         # logits: (B, T, 1)
         # seq_len: (B,)
-        scores = F.sigmoid(logits_hlc).squeeze()  # (B, T, 1) -> (B, T)
+        scores = F.sigmoid(logits_hlc).squeeze(2)  # (B, T, 1) -> (B, T)
         pairwise_diff = scores.unsqueeze(2) - scores.unsqueeze(1)  # (B, T, T)
         temp_mat = 1.0 - torch.abs(pairwise_diff)
         temp_mat = F.sigmoid((temp_mat - 0.5) / 0.1)  # (B, T, T)

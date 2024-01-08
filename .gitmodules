@@ -1,0 +1,3 @@
+[submodule "vid-anomaly-app"]
+	path = vid-anomaly-app
+	url = https://github.com/hongjiaherng/vid-anomaly-app.git

@@ -36,7 +36,7 @@ dataset_cfg:
   sampling_rate: 2
   streaming: false
   max_seq_len: 200
-  num_workers: 6
+  num_workers: 4
 
 # Logging Configs
 logging_cfg:

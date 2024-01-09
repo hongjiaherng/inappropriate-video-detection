@@ -32,3 +32,5 @@ logging_cfg:
   test_interval_epochs: 2
   log_dir: "./logs/"
   test_metric: ap
+
+# Running

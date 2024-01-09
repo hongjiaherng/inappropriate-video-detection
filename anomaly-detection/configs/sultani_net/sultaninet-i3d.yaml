@@ -1,0 +1,34 @@
+training_cfg:
+  max_epochs: 50
+  batch_size: 30
+  seed: 2233
+  resume_run_id: null
+  resume_ckpt_type: null
+
+optimizer_cfg:
+  lr: 0.001
+  weight_decay: 0.01
+
+model_cfg:
+  model_name: sultani_net
+  dropout_prob: 0.6
+  loss:
+    lambda_smooth: 0.00008
+    lambda_sparsity: 0.00008
+
+dataset_cfg:
+  feature_name: i3d_rgb
+  feature_dim: 2048
+  clip_len: 32
+  sampling_rate: 2
+  streaming: false
+  max_seq_len: 32
+  num_workers: 4
+
+logging_cfg:
+  exp_name: sultaninet-i3d
+  log_interval_steps: 10
+  ckpt_interval_epochs: 2
+  test_interval_epochs: 2
+  log_dir: "./logs/"
+  test_metric: ap

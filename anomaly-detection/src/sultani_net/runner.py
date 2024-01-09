@@ -157,7 +157,13 @@ def run(
             shuffle=True,
             seed=seed,
         )
-        test_loader = dataset.test_loader(config_name=feature_name, streaming=streaming, num_workers=num_workers)
+        test_loader = dataset.test_loader(
+            config_name=feature_name,
+            streaming=streaming,
+            num_workers=num_workers,
+            clip_len=clip_len,
+            sampling_rate=sampling_rate,
+        )
         train_steps_per_epoch = min(
             (
                 len(normal_loader)

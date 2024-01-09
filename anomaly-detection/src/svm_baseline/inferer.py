@@ -6,8 +6,8 @@ import dataset
 import torch
 import torch.utils.data
 import wandb
-from sultani_net.model import SultaniNet
-from sultani_net.test import test_no_log
+from svm_baseline.model import BaselineNet
+from svm_baseline.test import test_no_log
 
 
 def run(run_path: str, ckpt_type: str, logger: logging.Logger, **kwargs):
@@ -42,10 +42,9 @@ def inference(
         dataset_cfg["streaming"],
         dataset_cfg["num_workers"],  # nullable
     )  # dataset
-    dropout_prob, lambda_smooth, lambda_sparsity = (
+    dropout_prob, margin = (
         model_cfg["dropout_prob"],
-        model_cfg["loss"]["lambda_smooth"],
-        model_cfg["loss"]["lambda_sparsity"],
+        model_cfg["loss"]["margin"],
     )  # model
 
     logger.info("Initalizing test dataloader...")
@@ -65,7 +64,7 @@ def inference(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     logger.info("Initalizing model ...")
-    model = SultaniNet(feature_dim=feature_dim, dropout_prob=dropout_prob).to(device)
+    model = BaselineNet(feature_dim=feature_dim, dropout_prob=dropout_prob).to(device)
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt["model_state_dict"])
     epoch = ckpt["epoch"]

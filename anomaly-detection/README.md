@@ -34,6 +34,10 @@ python src/main.py --config_path configs/svm_baseline/baseline-swin.yaml svm_bas
 python src/main.py --config_path configs/svm_baseline/baseline-i3d.yaml svm_baseline
 python src/main.py --config_path configs/svm_baseline/baseline-c3d.yaml svm_baseline
 
+# Resume previous training
+python src/main.py --config_path configs/sultani_net/sultaninet-swin.yaml sultani_net --resume_run_id <wandb-run-id> --resume_ckpt_type last
+
+
 ```
 
 ## Model Training
@@ -42,10 +46,10 @@ python src/main.py --config_path configs/svm_baseline/baseline-c3d.yaml svm_base
 | ---------------------------- | ------------ |
 | Sultani-Net (swin)           | ✓            |
 | Sultani-Net (i3d)            | ✓            |
-| Sultani-Net (c3d)            | x            |
-| PengWu-Net (ctx_len_1, swin) | x            |
-| PengWu-Net (ctx_len_1, i3d)  | x            |
-| PengWu-Net (ctx_len_1, c3d)  | x            |
+| Sultani-Net (c3d)            | ✓            |
+| PengWu-Net (ctx_len_1, swin) | in progress  |
+| PengWu-Net (ctx_len_1, i3d)  | in progress  |
+| PengWu-Net (ctx_len_1, c3d)  | in progress  |
 | PengWu-Net (ctx_len_5, swin) | x            |
 | PengWu-Net (ctx_len_5, i3d)  | x            |
 | PengWu-Net (ctx_len_5, c3d)  | x            |

@@ -3,6 +3,7 @@ import logging
 
 import pengwu_net.inferer
 import sultani_net.inferer
+import svm_baseline.inferer
 
 
 def get_logger() -> logging.Logger:
@@ -31,6 +32,6 @@ if __name__ == "__main__":
     elif model_name == "sultani_net":
         sultani_net.inferer.run(**args, logger=logger)
     elif model_name == "svm_baseline":
-        pass
+        svm_baseline.inferer.run(**args, logger=logger)
     else:
         raise ValueError(f"Invalid model name: {args.model_name}")

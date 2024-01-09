@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class SultaniNet(nn.Module):
+class BaselineNet(nn.Module):
     def __init__(self, feature_dim: int, dropout_prob: float = 0.6):
         super().__init__()
 
@@ -25,7 +25,7 @@ class SultaniNet(nn.Module):
 
         x = self.dropout(F.relu(self.fc1(inputs)))
         x = self.dropout(F.relu(self.fc2(x)))
-        x = F.sigmoid(self.fc3(x))
+        x = self.fc3(x)
 
         return x
 
@@ -35,11 +35,13 @@ class SultaniNet(nn.Module):
             inputs (torch.Tensor): Input features. Shape (B, D).
 
         Returns:
-            torch.Tensor: The computed logits. Shape (B, 1).
+            torch.Tensor: The predicted labels. Shape (B, 1).
         """
-        x = self.forward(inputs)
 
-        return x
+        logits = self.forward(inputs)
+        scores = F.sigmoid(logits)
+
+        return scores
 
     def _init_weights(self, m: nn.Module) -> None:
         if isinstance(m, nn.Linear):

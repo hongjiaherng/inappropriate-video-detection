@@ -1,0 +1,33 @@
+training_cfg:
+  max_epochs: 50
+  batch_size: 128
+  seed: 2233
+  resume_run_id: null
+  resume_ckpt_type: null
+
+optimizer_cfg:
+  lr: 0.001
+  weight_decay: 0.01
+
+model_cfg:
+  model_name: svm_baseline
+  dropout_prob: 0.6
+  loss:
+    margin: 1.0
+
+dataset_cfg:
+  feature_name: swin_rgb
+  feature_dim: 768
+  clip_len: 32
+  sampling_rate: 2
+  streaming: false
+  max_seq_len: 32
+  num_workers: 4
+
+logging_cfg:
+  exp_name: svm-swin
+  log_interval_steps: 10
+  ckpt_interval_epochs: 2
+  test_interval_epochs: 2
+  log_dir: "./logs/"
+  test_metric: ap

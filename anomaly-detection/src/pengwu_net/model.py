@@ -38,6 +38,25 @@ class PengWuNet(nn.Module):
 
         return x_hl, x_hlc
 
+    def predict(self, inputs: torch.Tensor, seq_len: Optional[torch.Tensor] = None, online: bool = True) -> torch.Tensor:
+        if online:
+            return self._predict_online(inputs)
+        else:
+            return self._predict_offline(inputs, seq_len)
+
+    def _predict_online(self, inputs: torch.Tensor) -> torch.Tensor:
+        x_fused = self.fuse(inputs)  # (B, T, D) -> (B, T, 128)
+        x_hlc = self.hlc_approx(x_fused)  # (B, T, 128) -> (B, T, 1)
+        scores = F.sigmoid(x_hlc)  # (B, T, 1)
+
+        return scores
+
+    def _predict_offline(self, inputs: torch.Tensor, seq_len: Optional[torch.Tensor] = None) -> torch.Tensor:
+        x_hl, _ = self.forward(inputs, seq_len)
+        scores = F.sigmoid(x_hl)  # (B, T, 1)
+
+        return scores
+
     def _init_weights(self, m: nn.Module) -> None:
         if isinstance(m, nn.Conv1d) or isinstance(m, nn.Linear):
             nn.init.xavier_uniform_(m.weight)

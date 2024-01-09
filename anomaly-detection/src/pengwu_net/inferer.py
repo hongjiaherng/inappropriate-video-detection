@@ -52,7 +52,13 @@ def inference(
     )  # model
 
     logger.info("Initalizing test dataloader...")
-    test_loader = dataset.test_loader(config_name=feature_name, streaming=streaming, num_workers=num_workers)
+    test_loader = dataset.test_loader(
+        config_name=feature_name,
+        streaming=streaming,
+        num_workers=num_workers,
+        clip_len=clip_len,
+        sampling_rate=sampling_rate,
+    )
     test_steps = (
         len(test_loader)
         if not isinstance(test_loader.dataset, torch.utils.data.IterableDataset)

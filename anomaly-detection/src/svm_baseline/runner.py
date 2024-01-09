@@ -10,10 +10,10 @@ import torch.utils.data
 import tqdm.auto as tqdm
 import utils
 import wandb
-from sultani_net.losses import MILRankingLoss
-from sultani_net.model import SultaniNet
-from sultani_net.test import test_one_epoch
-from sultani_net.train import train_one_epoch
+from svm_baseline.losses import HingeLoss
+from svm_baseline.model import BaselineNet
+from svm_baseline.train import train_one_epoch
+from svm_baseline.test import test_one_epoch
 
 
 def save_checkpoint(
@@ -79,10 +79,9 @@ def run(
         optimizer_cfg["lr"],
         optimizer_cfg["weight_decay"],
     )  # optimizer
-    dropout_prob, lambda_smooth, lambda_sparsity = (
+    dropout_prob, margin = (
         model_cfg["dropout_prob"],
-        model_cfg["loss"]["lambda_smooth"],
-        model_cfg["loss"]["lambda_sparsity"],
+        model_cfg["loss"]["margin"],
     )  # model
     feature_name, feature_dim, clip_len, sampling_rate, streaming, max_seq_len, num_workers = (
         dataset_cfg["feature_name"],
@@ -137,23 +136,13 @@ def run(
 
         # Dataloader
         logger.info("Initalizing dataloader...")
-        normal_loader = dataset.train_loader(
+        train_loader = dataset.train_loader(
             config_name=feature_name,
             batch_size=batch_size,
             max_seq_len=max_seq_len,
             streaming=streaming,
+            filter="all",
             num_workers=num_workers,
-            filter="normal",
-            shuffle=True,
-            seed=seed,
-        )
-        anomaly_loader = dataset.train_loader(
-            config_name=feature_name,
-            batch_size=batch_size,
-            max_seq_len=max_seq_len,
-            streaming=streaming,
-            num_workers=num_workers,
-            filter="anomaly",
             shuffle=True,
             seed=seed,
         )
@@ -164,17 +153,10 @@ def run(
             clip_len=clip_len,
             sampling_rate=sampling_rate,
         )
-        train_steps_per_epoch = min(
-            (
-                len(normal_loader)
-                if not isinstance(normal_loader.dataset, torch.utils.data.IterableDataset)
-                else math.ceil(normal_loader.dataset.n_shards * 5 / normal_loader.batch_size)
-            ),
-            (
-                len(anomaly_loader)
-                if not isinstance(anomaly_loader.dataset, torch.utils.data.IterableDataset)
-                else math.ceil(anomaly_loader.dataset.n_shards * 5 / anomaly_loader.batch_size)
-            ),
+        train_steps_per_epoch = (
+            len(train_loader)
+            if not isinstance(train_loader.dataset, torch.utils.data.IterableDataset)
+            else math.ceil(train_loader.dataset.n_shards * 5 / train_loader.batch_size)
         )
         test_steps_per_epoch = (
             len(test_loader)
@@ -185,10 +167,10 @@ def run(
         # Model, optimizer, criterion
         logger.info("Initalizing model, optimizer, criterion...")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = SultaniNet(feature_dim=feature_dim, dropout_prob=dropout_prob).to(device)
+        model = BaselineNet(feature_dim=feature_dim, dropout_prob=dropout_prob).to(device)
         logger.info(f"Model preview: {model}")
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-        criterion = MILRankingLoss(lambda_smooth=lambda_smooth, lambda_sparsity=lambda_sparsity, seq_len=max_seq_len)
+        criterion = HingeLoss(margin=margin)
 
         start_epoch = 0
         best_test_metric_val = -float("inf")
@@ -206,6 +188,7 @@ def run(
             logger.info("Initial evaluation before training...")
             best_test_metric_val = test_one_epoch(
                 model=model,
+                criterion=criterion,
                 test_loader=test_loader,
                 device=device,
                 test_steps_per_epoch=test_steps_per_epoch,
@@ -221,8 +204,7 @@ def run(
             train_one_epoch(
                 model=model,
                 criterion=criterion,
-                normal_loader=normal_loader,
-                anomaly_loader=anomaly_loader,
+                train_loader=train_loader,
                 optimizer=optimizer,
                 device=device,
                 steps_per_epoch=train_steps_per_epoch,
@@ -233,6 +215,7 @@ def run(
             if (epoch + 1) % test_interval_epochs == 0 or epoch == max_epochs - 1 or epoch == 0:
                 cur_test_metric_val = test_one_epoch(
                     model=model,
+                    criterion=criterion,
                     test_loader=test_loader,
                     device=device,
                     test_steps_per_epoch=test_steps_per_epoch,

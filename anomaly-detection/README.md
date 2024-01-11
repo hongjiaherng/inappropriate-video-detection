@@ -54,5 +54,5 @@ python src/main.py --config_path configs/pengwu_net/hlnet-ctx_len_1-c3d.yaml pen
 | PengWu-Net (ctx_len_5, i3d)  | ✓                      |
 | PengWu-Net (ctx_len_5, c3d)  | ✓ (Crashed due to NaN) |
 | SVM Baseline (swin)          | ✓                      |
-| SVM Baseline (i3d)           | ✓ (Need to rerun)      |
+| SVM Baseline (i3d)           | ✓                      |
 | SVM Baseline (c3d)           | ✓                      |

@@ -29,7 +29,7 @@ class SultaniNet(nn.Module):
 
         return x
 
-    def predict(self, inputs: torch.Tensor) -> torch.Tensor:
+    def predict(self, inputs: torch.Tensor, **kwargs) -> torch.Tensor:
         """
         Args:
             inputs (torch.Tensor): Input features. Shape (B, D).

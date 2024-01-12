@@ -38,7 +38,7 @@ class PengWuNet(nn.Module):
 
         return x_hl, x_hlc
 
-    def predict(self, inputs: torch.Tensor, seq_len: Optional[torch.Tensor] = None, online: bool = True) -> torch.Tensor:
+    def predict(self, inputs: torch.Tensor, seq_len: Optional[torch.Tensor] = None, online: bool = True, **kwargs) -> torch.Tensor:
         if online:
             return self._predict_online(inputs)
         else:
@@ -295,10 +295,10 @@ class GraphConvolution(nn.Module):
         self.reset_parameters()
 
         if not self.skip_connection:
-            self.proj = lambda x: 0  # no skip connection: (B, T, D_out) + 0
+            self.proj = self._no_skip_connection  # no skip connection: (B, T, D_out) + 0
         elif in_features == out_features:
             # skip connection (in_features == out_features): (B, T, D_out=D_in) + (B, T, D_out=D_in)
-            self.proj = lambda x: x
+            self.proj = self._identity_skip_connection
         else:
             # skip connection (in_features != out_features): (B, T, D_out) + Linear(B, T, D_in) => (B, T, D_out) + (B, T, D_out) => (B, T, D_out)
             self.proj = nn.Conv1d(in_features, out_features, kernel_size=5, padding=2)
@@ -328,6 +328,12 @@ class GraphConvolution(nn.Module):
             proj_x = self.proj(x)
             x = x + proj_x
 
+        return x
+
+    def _no_skip_connection(self, x: torch.Tensor):
+        return 0
+
+    def _identity_skip_connection(self, x: torch.Tensor):
         return x
 
     def __repr__(self) -> str:

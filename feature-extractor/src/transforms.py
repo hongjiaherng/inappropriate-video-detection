@@ -68,9 +68,7 @@ class AdaptDataFormat(torch.nn.Module):
         return result
 
     def __repr__(self) -> str:
-        repr_str = (
-            f"{self.__class__.__name__}(id_key={self.id_key}, path_key={self.path_key})"
-        )
+        repr_str = f"{self.__class__.__name__}(id_key={self.id_key}, path_key={self.path_key})"
         return repr_str
 
 
@@ -120,9 +118,7 @@ class VideoReaderInit(torch.nn.Module):
             with open(fpath, "rb") as f:
                 return f.read()
         else:
-            raise ValueError(
-                f'io_backend="{self.io_backend}" is not supported. Please use "http" or "local" instead.'
-            )
+            raise ValueError(f'io_backend="{self.io_backend}" is not supported. Please use "http" or "local" instead.')
 
     def __repr__(self) -> str:
         repr_str = f"{self.__class__.__name__}(io_backend={self.io_backend})"
@@ -173,32 +169,18 @@ class TemporalClipSample(torch.nn.Module):
         if self.num_clips == -1:
             if self.drop_last:
                 max_num_clips = total_frames // (self.clip_len * self.sampling_rate)
-                frame_indices = np.arange(
-                    0,
-                    self.clip_len * self.sampling_rate * max_num_clips,
-                    self.sampling_rate,
-                )
+                frame_indices = np.arange(0, self.clip_len * self.sampling_rate * max_num_clips, self.sampling_rate)
 
             else:
-                max_num_clips = math.ceil(
-                    total_frames / (self.clip_len * self.sampling_rate)
-                )
-                frame_indices = np.arange(
-                    0,
-                    self.clip_len * self.sampling_rate * max_num_clips,
-                    self.sampling_rate,
-                )
+                max_num_clips = math.ceil(total_frames / (self.clip_len * self.sampling_rate))
+                frame_indices = np.arange(0, self.clip_len * self.sampling_rate * max_num_clips, self.sampling_rate)
 
                 if np.any(frame_indices >= total_frames):
                     if self.oob_option == "loop":
-                        frame_indices = self._apply_loop_last_clip_op(
-                            frame_indices, total_frames
-                        )
+                        frame_indices = self._apply_loop_last_clip_op(frame_indices, total_frames)
 
                     elif self.oob_option == "repeat_last":
-                        frame_indices = self._apply_repeat_last_op(
-                            frame_indices, total_frames
-                        )
+                        frame_indices = self._apply_repeat_last_op(frame_indices, total_frames)
 
         else:
             max_num_clips = self.num_clips
@@ -210,14 +192,10 @@ class TemporalClipSample(torch.nn.Module):
 
             if np.any(frame_indices >= total_frames):
                 if self.oob_option == "loop":
-                    frame_indices = self._apply_loop_video_op(
-                        frame_indices, total_frames
-                    )
+                    frame_indices = self._apply_loop_video_op(frame_indices, total_frames)
 
                 elif self.oob_option == "repeat_last":
-                    frame_indices = self._apply_repeat_last_op(
-                        frame_indices, total_frames
-                    )
+                    frame_indices = self._apply_repeat_last_op(frame_indices, total_frames)
 
         result["meta"]["frame_indices"] = frame_indices  # (num_clips, clip_len)
         result["meta"]["num_clips"] = max_num_clips
@@ -227,18 +205,10 @@ class TemporalClipSample(torch.nn.Module):
         return result
 
     def _apply_loop_last_clip_op(self, frame_indices, total_frames):
-        last_clip_start_frame = (
-            (total_frames // (self.clip_len * self.sampling_rate))
-            * self.clip_len
-            * self.sampling_rate
-        )
+        last_clip_start_frame = (total_frames // (self.clip_len * self.sampling_rate)) * self.clip_len * self.sampling_rate
         last_clip_start_idx = np.argmax(frame_indices >= last_clip_start_frame)
-        valid_frames = np.arange(
-            last_clip_start_frame, total_frames, self.sampling_rate
-        )
-        last_clip_frames = np.tile(
-            valid_frames, math.ceil(self.clip_len / len(valid_frames))
-        )[: self.clip_len]
+        valid_frames = np.arange(last_clip_start_frame, total_frames, self.sampling_rate)
+        last_clip_frames = np.tile(valid_frames, math.ceil(self.clip_len / len(valid_frames)))[: self.clip_len]
         frame_indices[last_clip_start_idx:] = last_clip_frames
 
         return frame_indices
@@ -288,13 +258,9 @@ class ClipBatching(torch.nn.Module):
 
         batch_data_list = []
 
-        for batch_id, batch_start_idx in enumerate(
-            range(0, num_clips, self.batch_size)
-        ):
+        for batch_id, batch_start_idx in enumerate(range(0, num_clips, self.batch_size)):
             batch_frame_indices = frame_indices[
-                batch_start_idx
-                * clip_len : (batch_start_idx + self.batch_size)
-                * clip_len
+                batch_start_idx * clip_len : (batch_start_idx + self.batch_size) * clip_len
             ]  # (batch_size * clip_len, )
             batch_num_clips = batch_frame_indices.shape[0] // clip_len
 
@@ -365,11 +331,7 @@ class BatchDecodeIter(torch.nn.Module):
         return self
 
     def __next__(self) -> Dict:
-        if (
-            self.batch_data_list is None
-            or self.vr is None
-            or self.current_batch_index == len(self.batch_data_list)
-        ):
+        if self.batch_data_list is None or self.vr is None or self.current_batch_index == len(self.batch_data_list):
             del self.vr, self.batch_data_list, self.misc_meta, self.clip_len
             gc.collect()
 
@@ -383,9 +345,7 @@ class BatchDecodeIter(torch.nn.Module):
         inputs = self.vr.get_batch(frame_indices).asnumpy()  # (N*T, H, W, C)
         inputs = torch.tensor(inputs, dtype=torch.uint8)
         inputs = torch.permute(inputs, (0, 3, 1, 2))  # (N*T, C, H, W)
-        inputs = torch.reshape(
-            inputs, (batch_in["num_clips"], self.clip_len, *inputs.shape[1:])
-        )  # (N, T, C, H, W)
+        inputs = torch.reshape(inputs, (batch_in["num_clips"], self.clip_len, *inputs.shape[1:]))  # (N, T, C, H, W)
 
         batch_out = {
             "inputs": inputs,
@@ -408,11 +368,7 @@ class BatchDecodeIter(torch.nn.Module):
         self.clip_len = result["meta"]["clip_len"]
         self.vr = result["meta"]["video_reader"]
         # remaining keys from result
-        self.misc_meta = {
-            k: v
-            for k, v in result["meta"].items()
-            if k not in {"batch_data", "video_reader"}
-        }
+        self.misc_meta = {k: v for k, v in result["meta"].items() if k not in {"batch_data", "video_reader"}}
         self.current_batch_index = 0
 
         return iter(self)
@@ -451,9 +407,7 @@ class VideoDecode(torch.nn.Module):
         clips = container.get_batch(frame_indices).asnumpy()  # (N*T, H, W, C)
         clips = torch.tensor(clips, dtype=torch.uint8)
         clips = torch.permute(clips, (0, 3, 1, 2))  # (N*T, C, H, W)
-        clips = torch.reshape(
-            clips, (num_clips, clip_len, *clips.shape[1:])
-        )  # (N, T, C, H, W)
+        clips = torch.reshape(clips, (num_clips, clip_len, *clips.shape[1:]))  # (N, T, C, H, W)
 
         result["inputs"] = clips
         result["meta"]["original_frame_shape"] = tuple(clips.shape[-2:])
@@ -493,9 +447,7 @@ class Resize(torch.nn.Module):
         clips = F.resize(clips, size=self.size, antialias=True)
 
         result["inputs"] = clips
-        result["meta"]["frame_shape"] = tuple(
-            clips.shape[-2:]
-        )  # last 2 dims surely represent (H, W)
+        result["meta"]["frame_shape"] = tuple(clips.shape[-2:])  # last 2 dims surely represent (H, W)
 
         return result
 
@@ -530,9 +482,7 @@ class FiveCrop(torch.nn.Module):
         clips = torch.stack(clips, dim=-5)  # (..., 5, C, T, H, W)
 
         result["inputs"] = clips
-        result["meta"]["frame_shape"] = tuple(
-            clips.shape[-2:]
-        )  # last 2 dims surely represent (H, W)
+        result["meta"]["frame_shape"] = tuple(clips.shape[-2:])  # last 2 dims surely represent (H, W)
         result["meta"]["num_crops"] = 5
 
         return result
@@ -568,9 +518,7 @@ class TenCrop(torch.nn.Module):
         clips = torch.stack(clips, dim=-5)  # (..., 10, C, T, H, W)
 
         result["inputs"] = clips
-        result["meta"]["frame_shape"] = tuple(
-            clips.shape[-2:]
-        )  # last 2 dims surely represent (H, W)
+        result["meta"]["frame_shape"] = tuple(clips.shape[-2:])  # last 2 dims surely represent (H, W)
         result["meta"]["num_crops"] = 10
 
         return result
@@ -606,9 +554,7 @@ class CenterCrop(torch.nn.Module):
         clips = torch.unsqueeze(clips, dim=-5)  # (..., 1, C, T, H, W)
 
         result["inputs"] = clips
-        result["meta"]["frame_shape"] = tuple(
-            clips.shape[-2:]
-        )  # last 2 dims surely represent (H, W)
+        result["meta"]["frame_shape"] = tuple(clips.shape[-2:])  # last 2 dims surely represent (H, W)
         result["meta"]["num_crops"] = 1
 
         return result
@@ -701,7 +647,8 @@ class ConvertTCHWToCTHW(torch.nn.Module):
         super().__init__()
         self.lead_dims = lead_dims
         self.permute_idx = tuple(range(0, self.lead_dims)) + tuple(
-            i + self.lead_dims for i in (1, 0, 2, 3)  # (T, C, H, W) -> (C, T, H, W)
+            i + self.lead_dims
+            for i in (1, 0, 2, 3)  # (T, C, H, W) -> (C, T, H, W)
         )
 
     def forward(self, result: Dict) -> Dict:

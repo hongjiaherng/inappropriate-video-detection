@@ -199,9 +199,7 @@ def build_clip_pipeline(
             size=preprocessing_cfg["crop_size"],
         ),
         my_transforms.ToDType(dtype=torch.float32, scale=True),
-        my_transforms.Normalize(
-            mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]
-        ),
+        my_transforms.Normalize(mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]),
         my_transforms.ConvertTCHWToCTHW(lead_dims=2),
         my_transforms.PackInputs(preserved_meta=[]),
     ]
@@ -275,9 +273,7 @@ def build_end2end_pipeline(
             size=preprocessing_cfg["crop_size"],
         ),
         my_transforms.ToDType(dtype=torch.float32, scale=True),
-        my_transforms.Normalize(
-            mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]
-        ),
+        my_transforms.Normalize(mean=preprocessing_cfg["mean"], std=preprocessing_cfg["std"]),
         my_transforms.ConvertTCHWToCTHW(lead_dims=2),
         my_transforms.PackInputs(preserved_meta=[]),
     ]
